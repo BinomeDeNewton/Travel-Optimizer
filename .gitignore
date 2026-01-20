@@ -1,0 +1,48 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+web/node_modules/
+web/dist/
+web/.vite/
+web/public/pipeline.json
+
+# OS
+.DS_Store
+
+# Generated outputs
+outputs/**
+!outputs/**/
+!outputs/**/.gitkeep
+
+data/cache/**
+!data/cache/.gitkeep
+
+# Local datasets / personal data
+data/raw/**
+!data/raw/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+
+# Secrets and local overrides
+*.local
+*.local.*
+*.secrets.*
+*secret*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.log
+
+# Local environment
+.env
+.env.*

@@ -6,10 +6,10 @@ Unified pipeline for timeoff planning, destination suggestions, flight selection
 
 ## Quickstart
 
-First install:
+Install dependencies:
 
 ```bash
-make bootstrap
+make deps
 ```
 
 Run the app:
@@ -68,7 +68,8 @@ Then launch the API and UI as usual. The UI queue tab will read from Redis-backe
 
 - Tooling is pinned via `.python-version` and `.node-version`.
 - Python deps are locked with `uv.lock`; web deps are locked via `web/package-lock.json`.
-- Use `make bootstrap` to install both environments.
+- Use `make deps` to install both environments.
+- Use `make bootstrap` to install deps and generate map data.
 - `make audit` runs `npm audit` and `uv pip check`.
 - `make clean` removes virtual envs, node_modules, build artifacts, and cache outputs.
 - `make dev` starts the API and UI together (pipeline runs when triggered from the UI).
@@ -85,7 +86,7 @@ Then launch the API and UI as usual. The UI queue tab will read from Redis-backe
 
 ## Notes
 
-- Timeoff optimization currently supports FR holidays only.
+- Timeoff optimization uses the `holidays` package for country calendars (coverage depends on supported countries/subdivisions).
 - Flight insights use `flight_planner.py` and may require network access and extra time.
 - Flight fetch defaults to `local`. Use `TRAVEL_OPTIMIZER_FLIGHT_FETCH_MODE=auto` to try `common` then `local`.
 - Set `TRAVEL_OPTIMIZER_PATCH_LOCAL_PLAYWRIGHT=1` only if you need the custom Playwright fetcher.
