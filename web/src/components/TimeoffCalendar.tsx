@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { RestPeriod, TimeoffDay } from "../types";
 import { parseISODate } from "../utils/format";
+import { useI18n } from "../i18n";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -58,6 +59,7 @@ export default function TimeoffCalendar({
   locale,
   timeZone
 }: TimeoffCalendarProps) {
+  const { t } = useI18n();
   const weekdays = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone });
     const base = new Date(Date.UTC(2024, 0, 1, 12, 0, 0));
@@ -121,8 +123,8 @@ export default function TimeoffCalendar({
   if (!days?.length) {
     return (
       <div className="calendar-empty">
-        <h3>Calendar data missing</h3>
-        <p>Run the optimizer to generate a day-by-day calendar with holidays and optimized leave.</p>
+        <h3>{t("calendar.empty.title")}</h3>
+        <p>{t("calendar.empty.description")}</p>
       </div>
     );
   }
@@ -154,10 +156,13 @@ export default function TimeoffCalendar({
               const selectedClass = cell.period && cell.period === selectedPeriodKey ? "selected" : "";
               const imposedClass = cell.info?.imposed ? "imposed" : "";
               const lockedClass = cell.info?.locked ? "locked" : "";
+              const baseLabel = t(`calendar.base.${baseKind.toLowerCase()}`);
+              const leaveLabel =
+                leaveKind !== "NONE" ? t(`calendar.leave.${leaveKind.toLowerCase()}`) : "";
               const labelParts = [
                 cell.date,
-                baseKind.toLowerCase(),
-                leaveKind !== "NONE" ? `leave ${leaveKind.toLowerCase()}` : ""
+                baseLabel,
+                leaveLabel ? t("calendar.label.leave", { leave: leaveLabel }) : ""
               ].filter(Boolean);
               const tooltip = cell.info?.reason ?? "";
               return (

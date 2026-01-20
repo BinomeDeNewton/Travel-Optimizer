@@ -3,12 +3,79 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, Tuple
 
 try:
     import holidays
 except Exception:  # pragma: no cover - optional dependency
     holidays = None
+
+try:
+    import pycountry
+except Exception:  # pragma: no cover - optional dependency
+    pycountry = None
+
+_COUNTRY_ALIASES = {
+    "BURMA": "MM",
+    "CAPE VERDE": "CV",
+    "CONGO (BRAZZAVILLE)": "CG",
+    "CONGO (KINSHASA)": "CD",
+    "EAST TIMOR": "TL",
+    "MACAU": "MO",
+    "SWAZILAND": "SZ",
+    "TURKEY": "TR",
+}
+
+
+def _resolve_country_code(country_code: str) -> str:
+    if not country_code:
+        raise ValueError("country_code is required")
+    raw = country_code.strip()
+    if not raw:
+        raise ValueError("country_code is required")
+    alias = _COUNTRY_ALIASES.get(raw.upper())
+    if alias:
+        return alias
+    upper = raw.upper()
+    if len(upper) == 2 and upper.isalpha():
+        return upper
+    if pycountry:
+        if len(upper) == 3 and upper.isalpha():
+            match = pycountry.countries.get(alpha_3=upper)
+            if match:
+                return match.alpha_2
+        match = pycountry.countries.get(name=raw)
+        if not match:
+            try:
+                match = pycountry.countries.search_fuzzy(raw)[0]
+            except LookupError:
+                match = None
+        if match:
+            return match.alpha_2
+    return upper
+
+
+def normalize_country_input(
+    country_code: str,
+    subdiv: Optional[str] = None,
+) -> Tuple[str, Optional[str]]:
+    if not country_code:
+        raise ValueError("country_code is required")
+    raw = country_code.strip()
+    if not raw:
+        raise ValueError("country_code is required")
+    normalized_subdiv = subdiv.strip().upper() if subdiv else None
+    if not normalized_subdiv:
+        for sep in ("-", "_"):
+            if sep in raw:
+                prefix, suffix = raw.split(sep, 1)
+                prefix = prefix.strip()
+                suffix = suffix.strip()
+                if prefix and suffix:
+                    raw = prefix
+                    normalized_subdiv = suffix.upper()
+                break
+    return _resolve_country_code(raw), normalized_subdiv
 
 
 def calculer_paques(annee: int) -> date:
@@ -53,15 +120,18 @@ def french_holidays(annee: int) -> Set[date]:
 
 
 def holiday_names(year: int, country_code: str, subdiv: Optional[str] = None) -> Dict[date, str]:
-    if not country_code:
-        raise ValueError("country_code is required")
-    code = country_code.strip().upper()
+    code, normalized_subdiv = normalize_country_input(country_code, subdiv)
     if holidays is None:
         if code == "FR":
             return french_holiday_names(year)
         raise RuntimeError("holidays package is required for non-FR calendars")
     try:
-        holiday_map = holidays.country_holidays(code, subdiv=subdiv, years=[year], observed=True)
+        holiday_map = holidays.country_holidays(
+            code,
+            subdiv=normalized_subdiv,
+            years=[year],
+            observed=True,
+        )
     except Exception as exc:
         if code == "FR":
             return french_holiday_names(year)

@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "../lib/utils";
+import { useI18n } from "../i18n";
 
 type DestinationCountryPickerProps = {
   options: MultiSelectOption[];
@@ -35,16 +36,24 @@ export default function DestinationCountryPicker({
   options,
   selected,
   onChange,
-  placeholder = "Select destination countries",
-  emptyMessage = "No countries found",
-  title = "Destination countries",
-  subtitle = "Search and select multiple countries.",
-  searchPlaceholder = "Search countries",
-  emptyState = "No destination countries selected yet.",
+  placeholder,
+  emptyMessage,
+  title,
+  subtitle,
+  searchPlaceholder,
+  emptyState,
   maxVisible
 }: DestinationCountryPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  const placeholderText = placeholder ?? t("picker.destinationCountries.placeholder");
+  const emptyText = emptyMessage ?? t("picker.destinationCountries.empty");
+  const titleText = title ?? t("picker.destinationCountries.title");
+  const subtitleText = subtitle ?? t("picker.destinationCountries.subtitle");
+  const searchPlaceholderText = searchPlaceholder ?? t("picker.destinationCountries.search");
+  const emptyStateText = emptyState ?? t("picker.destinationCountries.emptyState");
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const optionMap = useMemo(() => new Map(options.map((opt) => [opt.value, opt])), [options]);
@@ -73,7 +82,7 @@ export default function DestinationCountryPicker({
     const order: string[] = [];
     const map = new Map<string, MultiSelectOption[]>();
     filteredOptions.forEach((option) => {
-      const group = option.group ?? "Other";
+      const group = option.group ?? t("label.other");
       if (!map.has(group)) {
         map.set(group, []);
         order.push(group);
@@ -81,14 +90,14 @@ export default function DestinationCountryPicker({
       map.get(group)?.push(option);
     });
     return { order, map };
-  }, [filteredOptions]);
+  }, [filteredOptions, t]);
 
   const previewText = useMemo(() => {
-    if (!selectedOptions.length) return placeholder;
+    if (!selectedOptions.length) return placeholderText;
     const preview = selectedOptions.slice(0, 2).map((option) => option.label).join(", ");
     const extra = selectedOptions.length - 2;
     return extra > 0 ? `${preview} +${extra}` : preview;
-  }, [selectedOptions, placeholder]);
+  }, [selectedOptions, placeholderText]);
 
   const toggleValue = (value: string) => {
     if (selectedSet.has(value)) {
@@ -124,18 +133,23 @@ export default function DestinationCountryPicker({
         <PopoverContent className="country-picker-popover" align="start">
           <div className="country-picker-toolbar">
             <div>
-              <h4>{title}</h4>
-              <p className="muted">{subtitle}</p>
+              <h4>{titleText}</h4>
+              <p className="muted">{subtitleText}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={handleClear} disabled={!selectedOptions.length}>
-              Clear
+              {t("action.clear")}
             </Button>
           </div>
           <Command shouldFilter={false}>
-            <CommandInput placeholder={searchPlaceholder} value={query} onValueChange={setQuery} autoFocus />
+            <CommandInput
+              placeholder={searchPlaceholderText}
+              value={query}
+              onValueChange={setQuery}
+              autoFocus
+            />
             <CommandList>
               {!filteredOptions.length ? (
-                <CommandEmpty>{emptyMessage}</CommandEmpty>
+                <CommandEmpty>{emptyText}</CommandEmpty>
               ) : (
                 grouped.order.map((group) => (
                   <CommandGroup key={group} heading={group}>
@@ -175,14 +189,14 @@ export default function DestinationCountryPicker({
                 type="button"
                 className="country-chip-remove"
                 onClick={() => toggleValue(option.value)}
-                aria-label={`Remove ${option.label}`}
+                aria-label={t("action.removeItem", { item: option.label })}
               >
                 x
               </button>
             </Badge>
           ))
         ) : (
-          <span className="muted">{emptyState}</span>
+          <span className="muted">{emptyStateText}</span>
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useI18n } from "../i18n";
 
 export type MultiSelectOption = {
   value: string;
@@ -24,15 +25,19 @@ export default function MultiSelect({
   options,
   selected,
   onChange,
-  placeholder = "Search...",
-  emptyMessage = "No matches",
+  placeholder,
+  emptyMessage,
   maxVisible = 8,
   listHeight
 }: MultiSelectProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const optionMap = useMemo(() => new Map(options.map((opt) => [opt.value, opt])), [options]);
   const hasGroups = useMemo(() => options.some((opt) => opt.group), [options]);
+
+  const placeholderText = placeholder ?? t("multiSelect.placeholder");
+  const emptyText = emptyMessage ?? t("multiSelect.empty");
 
   const filtered = useMemo(() => {
     const term = normalize(query);
@@ -63,8 +68,8 @@ export default function MultiSelect({
         className="multi-search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
+        placeholder={placeholderText}
+        aria-label={placeholderText}
       />
       <div className="multi-selected">
         {selected.length ? (
@@ -78,7 +83,7 @@ export default function MultiSelect({
                 <button
                   type="button"
                   onClick={() => removeValue(value)}
-                  aria-label={`Remove ${option?.label ?? value}`}
+                  aria-label={t("action.removeItem", { item: option?.label ?? value })}
                 >
                   x
                 </button>
@@ -86,7 +91,7 @@ export default function MultiSelect({
             );
           })
         ) : (
-          <span className="muted">No selection yet.</span>
+          <span className="muted">{t("multiSelect.emptySelection")}</span>
         )}
       </div>
       <div className="multi-list" style={listHeight ? { maxHeight: `${listHeight}px` } : undefined}>
@@ -122,7 +127,7 @@ export default function MultiSelect({
             return items;
           })()
         ) : (
-          <span className="muted">{emptyMessage}</span>
+          <span className="muted">{emptyText}</span>
         )}
       </div>
     </div>

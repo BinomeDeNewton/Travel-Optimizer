@@ -18,8 +18,8 @@ export type ItinerarySuggestion = {
 
 export type ItineraryCategory = {
   key: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
   suggestions: ItinerarySuggestion[];
 };
 
@@ -69,20 +69,20 @@ export const buildChaslesItineraries = (options: {
   const categories = [
     {
       key: "direct",
-      label: "Direct escape",
-      description: "Single-country loop. Origin → A → Origin.",
+      labelKey: "itinerary.category.direct.label",
+      descriptionKey: "itinerary.category.direct.description",
       stops: 1
     },
     {
       key: "chain",
-      label: "Chasles chain",
-      description: "Two-country chain (A→B + B→C = A→C).",
+      labelKey: "itinerary.category.chain.label",
+      descriptionKey: "itinerary.category.chain.description",
       stops: 2
     },
     {
       key: "loop",
-      label: "Grand loop",
-      description: "Three-country loop with balanced stays.",
+      labelKey: "itinerary.category.loop.label",
+      descriptionKey: "itinerary.category.loop.description",
       stops: 3
     }
   ];
@@ -114,8 +114,8 @@ export const buildChaslesItineraries = (options: {
 
       return {
         key: category.key,
-        label: category.label,
-        description: category.description,
+        labelKey: category.labelKey,
+        descriptionKey: category.descriptionKey,
         suggestions
       };
     })

@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "../lib/utils";
+import { useI18n } from "../i18n";
 
 type OriginCountryPickerProps = {
   options: MultiSelectOption[];
@@ -34,15 +35,23 @@ export default function OriginCountryPicker({
   options,
   value,
   onChange,
-  placeholder = "Select origin country",
-  emptyMessage = "No countries found",
-  title = "Origin country",
-  subtitle = "Pick where your trip starts.",
-  badgeFallback = "Origin",
-  searchPlaceholder = "Search countries"
+  placeholder,
+  emptyMessage,
+  title,
+  subtitle,
+  badgeFallback,
+  searchPlaceholder
 }: OriginCountryPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  const placeholderText = placeholder ?? t("picker.originCountry.placeholder");
+  const emptyText = emptyMessage ?? t("picker.originCountry.empty");
+  const titleText = title ?? t("picker.originCountry.title");
+  const subtitleText = subtitle ?? t("picker.originCountry.subtitle");
+  const badgeFallbackText = badgeFallback ?? t("picker.originCountry.badge");
+  const searchPlaceholderText = searchPlaceholder ?? t("picker.originCountry.search");
 
   const selectedOption = useMemo(() => {
     if (!value) return null;
@@ -62,7 +71,7 @@ export default function OriginCountryPicker({
     const order: string[] = [];
     const map = new Map<string, MultiSelectOption[]>();
     filteredOptions.forEach((option) => {
-      const group = option.group ?? "Other";
+      const group = option.group ?? t("label.other");
       if (!map.has(group)) {
         map.set(group, []);
         order.push(group);
@@ -70,7 +79,7 @@ export default function OriginCountryPicker({
       map.get(group)?.push(option);
     });
     return { order, map };
-  }, [filteredOptions]);
+  }, [filteredOptions, t]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -96,11 +105,11 @@ export default function OriginCountryPicker({
           <Button variant="outline" className="origin-picker-trigger">
             <span className="origin-picker-value">
               {selectedOption?.flag && <span className="flag">{selectedOption.flag}</span>}
-              <span className="origin-picker-label">{selectedOption?.label ?? placeholder}</span>
+              <span className="origin-picker-label">{selectedOption?.label ?? placeholderText}</span>
               {selectedOption?.hint && <span className="origin-picker-code">{selectedOption.hint}</span>}
             </span>
             <span className="origin-picker-meta">
-              <Badge variant="outline">{selectedOption?.group ?? badgeFallback}</Badge>
+              <Badge variant="outline">{selectedOption?.group ?? badgeFallbackText}</Badge>
               <span className="country-picker-caret">v</span>
             </span>
           </Button>
@@ -108,18 +117,23 @@ export default function OriginCountryPicker({
         <PopoverContent className="origin-picker-popover" align="start">
           <div className="origin-picker-toolbar">
             <div>
-              <h4>{title}</h4>
-              <p className="muted">{subtitle}</p>
+              <h4>{titleText}</h4>
+              <p className="muted">{subtitleText}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={handleClear} disabled={!selectedOption}>
-              Clear
+              {t("action.clear")}
             </Button>
           </div>
           <Command shouldFilter={false}>
-            <CommandInput placeholder={searchPlaceholder} value={query} onValueChange={setQuery} autoFocus />
+            <CommandInput
+              placeholder={searchPlaceholderText}
+              value={query}
+              onValueChange={setQuery}
+              autoFocus
+            />
             <CommandList>
               {!filteredOptions.length ? (
-                <CommandEmpty>{emptyMessage}</CommandEmpty>
+                <CommandEmpty>{emptyText}</CommandEmpty>
               ) : (
                 grouped.order.map((group) => (
                   <CommandGroup key={group} heading={group}>

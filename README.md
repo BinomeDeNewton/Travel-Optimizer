@@ -88,6 +88,7 @@ Then launch the API and UI as usual. The UI queue tab will read from Redis-backe
 
 - Timeoff optimization uses the `holidays` package for country calendars (coverage depends on supported countries/subdivisions).
 - Flight insights use `flight_planner.py` and may require network access and extra time.
+- Flight scraping can use Google Flights via `fast_flights`, with parallelized tasks across airport pairs when enabled.
 - Flight fetch defaults to `local`. Use `TRAVEL_OPTIMIZER_FLIGHT_FETCH_MODE=auto` to try `common` then `local`.
 - Set `TRAVEL_OPTIMIZER_PATCH_LOCAL_PLAYWRIGHT=1` only if you need the custom Playwright fetcher.
 - Normalization defaults can be overridden via `TRAVEL_OPTIMIZER_LOCALE` (`fr-FR`), `TRAVEL_OPTIMIZER_TIMEZONE` (`Europe/Paris`), `TRAVEL_OPTIMIZER_CURRENCY` (`EUR`).

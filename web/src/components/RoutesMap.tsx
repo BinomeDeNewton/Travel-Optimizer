@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { DestinationSuggestion, FlightOption, PipelineResult, RestPeriod } from "../types";
 import { FormatConfig, formatCurrency, formatDate, formatDuration } from "../utils/format";
+import { useI18n } from "../i18n";
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 const ORIGIN_COLOR = "#1f8a70";
@@ -141,6 +142,7 @@ const buildAirportInfo = (routes: RouteInfo[], airports: AirportCoordinates) => 
 };
 
 export default function RoutesMap({ data, formatConfig }: { data: PipelineResult; formatConfig: FormatConfig }) {
+  const { t } = useI18n();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -223,11 +225,11 @@ export default function RoutesMap({ data, formatConfig }: { data: PipelineResult
         const payload = (await response.json()) as AirportCoordinates;
         setAirports(payload);
       } catch (err) {
-        setAirportsError("Airport data is missing. Run `make map-data`.");
+        setAirportsError(t("map.error.missingAirports"));
       }
     };
     loadAirports();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -365,6 +367,13 @@ export default function RoutesMap({ data, formatConfig }: { data: PipelineResult
 
   const routeDetails = selectedRoute;
   const airportDetails = selectedAirport;
+  const roleLabel = airportDetails
+    ? (() => {
+        const key = `map.role.${airportDetails.role}`;
+        const translated = t(key);
+        return translated === key ? airportDetails.role : translated;
+      })()
+    : "";
 
   return (
     <div className="map-grid">
@@ -372,48 +381,48 @@ export default function RoutesMap({ data, formatConfig }: { data: PipelineResult
         <div ref={mapContainerRef} className="map-canvas" />
         <div className="map-legend">
           <span>
-            <i className="legend-dot origin" /> Origins
+            <i className="legend-dot origin" /> {t("map.legend.origins")}
           </span>
           <span>
-            <i className="legend-dot dest" /> Destinations
+            <i className="legend-dot dest" /> {t("map.legend.destinations")}
           </span>
           <span>
-            <i className="legend-line" /> Routes
+            <i className="legend-line" /> {t("map.legend.routes")}
           </span>
         </div>
         {airportsError && <div className="map-overlay">{airportsError}</div>}
         {!airportsError && !routesGeojson?.features.length && (
-          <div className="map-overlay">No routes to display yet.</div>
+          <div className="map-overlay">{t("map.empty.noRoutes")}</div>
         )}
       </div>
       <div className="map-info">
-        <h4>Route insights</h4>
+        <h4>{t("map.title")}</h4>
         {routeDetails ? (
           <div className="map-detail">
-            <p className="muted">Selected route</p>
+            <p className="muted">{t("map.selectedRoute")}</p>
             <strong>
               {routeDetails.origin} → {routeDetails.destination}
             </strong>
             <div className="map-detail-grid">
               <div>
-                <p className="muted">Best price</p>
+                <p className="muted">{t("map.bestPrice")}</p>
                 <strong>{formatCurrency(routeDetails.minPrice, formatConfig)}</strong>
               </div>
               <div>
-                <p className="muted">Min duration</p>
+                <p className="muted">{t("map.minDuration")}</p>
                 <strong>{formatDuration(routeDetails.minDuration)}</strong>
               </div>
               <div>
-                <p className="muted">Stops</p>
-                <strong>{routeDetails.minStops ?? "--"}</strong>
+                <p className="muted">{t("map.stops")}</p>
+                <strong>{routeDetails.minStops ?? t("common.na")}</strong>
               </div>
               <div>
-                <p className="muted">Flight options</p>
+                <p className="muted">{t("map.flightOptions")}</p>
                 <strong>{routeDetails.flightCount}</strong>
               </div>
             </div>
             <div>
-              <p className="muted">Best rest windows</p>
+              <p className="muted">{t("map.bestRestWindows")}</p>
               <ul>
                 {routeDetails.restPeriods.slice(0, 3).map((period) => (
                   <li key={`${period.start_date}-${period.end_date}`}>{restRange(period, formatConfig)}</li>
@@ -423,25 +432,24 @@ export default function RoutesMap({ data, formatConfig }: { data: PipelineResult
           </div>
         ) : airportDetails ? (
           <div className="map-detail">
-            <p className="muted">Selected airport</p>
+            <p className="muted">{t("map.selectedAirport")}</p>
             <strong>{airportDetails.code}</strong>
             <div className="map-detail-grid">
               <div>
-                <p className="muted">Role</p>
-                <strong>{airportDetails.role}</strong>
+                <p className="muted">{t("map.role")}</p>
+                <strong>{roleLabel}</strong>
               </div>
               <div>
-                <p className="muted">Routes</p>
+                <p className="muted">{t("map.routes")}</p>
                 <strong>{airportDetails.routeCount}</strong>
               </div>
             </div>
           </div>
         ) : (
           <div className="map-detail">
-            <p className="muted">Click a route or airport on the map.</p>
+            <p className="muted">{t("map.empty.prompt")}</p>
             <p>
-              The map highlights origin hubs, destination clusters, and the most competitive routes based on price and
-              duration.
+              {t("map.empty.description")}
             </p>
           </div>
         )}

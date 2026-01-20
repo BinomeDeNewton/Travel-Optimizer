@@ -17,43 +17,6 @@ except Exception:  # pragma: no cover - optional dependency
 from travel_optimizer.core.models import DestinationSuggestion, RestPeriod
 from travel_optimizer.modules.destinations.enrichment import enrich_suggestions
 
-DESTINATIONS_INTEREST: Dict[str, List[str]] = {
-    "Tanzania": ["Zanzibar"],
-    "Morocco": [],
-    "Egypt": [],
-    "South Africa": ["Kruger Park", "Durban", "Cape Town", "Johannesburg"],
-    "Mexico": [],
-    "Canada": [],
-    "United States": ["New York"],
-    "Peru": ["Cuzco"],
-    "Argentina": [],
-    "Japan": ["Tokyo", "Kyoto", "Osaka", "Hiroshima"],
-    "South Korea": ["Seoul"],
-    "India": ["Agra"],
-    "Thailand": ["Bangkok"],
-    "Vietnam": ["Nha Trang", "Danang", "Hanoi", "Ho Chi Minh City"],
-    "Cambodia": ["Siem Reap"],
-    "Indonesia": ["Bali"],
-    "Malaysia": ["Kuching", "Ipoh", "Johor Bahru", "Kuala Lumpur", "Langkawi", "Malacca", "Penang"],
-    "Austria": ["Vienna"],
-    "Italy": ["Venice", "Cinque Terre", "Dolomites", "Cagliari"],
-    "Turkey": ["Cappadocia"],
-    "France": [
-        "Paris",
-        "Biarritz",
-        "Lac d'O",
-        "Gorges du Verdon",
-        "Mont d'Or",
-        "Corsica",
-        "French Riviera",
-        "Chateaux de la Loire",
-        "Mont Saint Michel",
-    ],
-    "Belgium": ["Bruges"],
-    "New Caledonia": ["Noumea"],
-    "French Polynesia": ["Tahiti"],
-}
-
 
 @dataclass
 class AirportInfo:
@@ -232,7 +195,7 @@ class DestinationAdvisor:
         preferred_cities: Optional[List[str]],
         preferred_countries: Optional[List[str]],
     ) -> Dict[str, List[str]]:
-        interests = {k: list(v) for k, v in DESTINATIONS_INTEREST.items()}
+        interests: Dict[str, List[str]] = {}
 
         if preferred_countries:
             for country in preferred_countries:
@@ -283,6 +246,9 @@ class DestinationAdvisor:
         preferred_country_set = {c.lower() for c in preferred_countries or []}
         preferred_city_set = {c.lower() for c in preferred_cities or []}
         haul_set = {h.lower() for h in (haul_types or []) if h}
+
+        if not interests:
+            return []
 
         suggestions: List[DestinationSuggestion] = []
         for period in rest_periods:

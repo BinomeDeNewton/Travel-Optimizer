@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "../lib/utils";
+import { useI18n } from "../i18n";
 
 type OriginCityPickerProps = {
   options: MultiSelectOption[];
@@ -35,16 +36,24 @@ export default function OriginCityPicker({
   options,
   value,
   onChange,
-  placeholder = "Select origin city",
-  emptyMessage = "No cities found",
+  placeholder,
+  emptyMessage,
   disabled = false,
-  title = "Origin city",
-  subtitle = "Choose the city you depart from.",
-  badgeFallback = "City",
-  searchPlaceholder = "Search cities"
+  title,
+  subtitle,
+  badgeFallback,
+  searchPlaceholder
 }: OriginCityPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  const placeholderText = placeholder ?? t("picker.originCity.placeholder");
+  const emptyText = emptyMessage ?? t("picker.originCity.empty");
+  const titleText = title ?? t("picker.originCity.title");
+  const subtitleText = subtitle ?? t("picker.originCity.subtitle");
+  const badgeFallbackText = badgeFallback ?? t("picker.originCity.badge");
+  const searchPlaceholderText = searchPlaceholder ?? t("picker.originCity.search");
 
   const selectedOption = useMemo(() => {
     if (!value) return null;
@@ -67,7 +76,7 @@ export default function OriginCityPicker({
     const order: string[] = [];
     const map = new Map<string, MultiSelectOption[]>();
     filteredOptions.forEach((option) => {
-      const group = option.group ?? "Cities";
+      const group = option.group ?? t("label.cities");
       if (!map.has(group)) {
         map.set(group, []);
         order.push(group);
@@ -75,9 +84,9 @@ export default function OriginCityPicker({
       map.get(group)?.push(option);
     });
     return { order, map };
-  }, [filteredOptions]);
+  }, [filteredOptions, t]);
 
-  const badgeLabel = selectedOption?.hint ? "Airports" : badgeFallback;
+  const badgeLabel = selectedOption?.hint ? t("label.airports") : badgeFallbackText;
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (disabled) {
@@ -107,7 +116,7 @@ export default function OriginCityPicker({
           <Button variant="outline" className="origin-picker-trigger" disabled={disabled}>
             <span className="origin-picker-value">
               <span className={cn("origin-picker-label", !selectedOption && "is-placeholder")}>
-                {selectedOption?.label ?? placeholder}
+                {selectedOption?.label ?? placeholderText}
               </span>
               {selectedOption?.hint && <span className="origin-picker-code">{selectedOption.hint}</span>}
             </span>
@@ -120,18 +129,23 @@ export default function OriginCityPicker({
         <PopoverContent className="origin-picker-popover" align="start">
           <div className="origin-picker-toolbar">
             <div>
-              <h4>{title}</h4>
-              <p className="muted">{subtitle}</p>
+              <h4>{titleText}</h4>
+              <p className="muted">{subtitleText}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={handleClear} disabled={!selectedOption}>
-              Clear
+              {t("action.clear")}
             </Button>
           </div>
           <Command shouldFilter={false}>
-            <CommandInput placeholder={searchPlaceholder} value={query} onValueChange={setQuery} autoFocus />
+            <CommandInput
+              placeholder={searchPlaceholderText}
+              value={query}
+              onValueChange={setQuery}
+              autoFocus
+            />
             <CommandList>
               {!filteredOptions.length ? (
-                <CommandEmpty>{emptyMessage}</CommandEmpty>
+                <CommandEmpty>{emptyText}</CommandEmpty>
               ) : (
                 grouped.order.map((group) => (
                   <CommandGroup key={group} heading={group}>

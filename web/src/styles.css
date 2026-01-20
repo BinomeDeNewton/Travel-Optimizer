@@ -2,17 +2,58 @@
   color-scheme: light;
   --bg: #f7f2e9;
   --bg-soft: #eef3ea;
+  --bg-spot: #fdf6ee;
   --ink: #1c252a;
   --muted: #5d6b73;
   --accent: #ff6b4a;
   --accent-2: #1f8a70;
   --card: rgba(255, 255, 255, 0.78);
+  --surface-ghost: rgba(255, 255, 255, 0.7);
+  --surface-soft: rgba(255, 255, 255, 0.75);
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --surface-solid: rgba(255, 255, 255, 0.95);
+  --map-overlay: rgba(248, 244, 236, 0.72);
+  --tooltip-bg: rgba(28, 37, 42, 0.92);
+  --tooltip-ink: #fff;
+  --switch-track: rgba(18, 28, 32, 0.12);
+  --switch-thumb: #fff;
   --stroke: rgba(18, 28, 32, 0.08);
   --shadow: 0 20px 60px rgba(17, 26, 30, 0.12);
+  --glow-1: rgba(255, 107, 74, 0.18);
+  --glow-2: rgba(31, 138, 112, 0.18);
+  --glow-3: rgba(25, 56, 63, 0.12);
   --radius: 20px;
   --radius-lg: 28px;
   --font-sans: "Space Grotesk", sans-serif;
   --font-serif: "Newsreader", serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #10161b;
+  --bg-soft: #141c21;
+  --bg-spot: #1b242b;
+  --ink: #f2f6f8;
+  --muted: #9fb0b8;
+  --accent: #ff7b59;
+  --accent-2: #39c6a3;
+  --card: rgba(18, 24, 28, 0.82);
+  --surface-ghost: rgba(18, 24, 28, 0.72);
+  --surface-soft: rgba(22, 30, 34, 0.78);
+  --surface: rgba(24, 32, 36, 0.88);
+  --surface-strong: rgba(30, 38, 44, 0.92);
+  --surface-solid: rgba(34, 42, 48, 0.96);
+  --map-overlay: rgba(12, 16, 20, 0.78);
+  --tooltip-bg: rgba(10, 14, 18, 0.95);
+  --tooltip-ink: #f7f9fb;
+  --switch-track: rgba(255, 255, 255, 0.12);
+  --switch-thumb: #f7f9fb;
+  --stroke: rgba(236, 244, 248, 0.12);
+  --shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
+  --glow-1: rgba(255, 107, 74, 0.12);
+  --glow-2: rgba(57, 198, 163, 0.18);
+  --glow-3: rgba(74, 114, 128, 0.18);
 }
 
 * {
@@ -23,7 +64,7 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--ink);
-  background: radial-gradient(circle at top left, #fdf6ee 0%, #f7f2e9 40%, #eef3ea 100%);
+  background: radial-gradient(circle at top left, var(--bg-spot) 0%, var(--bg) 40%, var(--bg-soft) 100%);
   min-height: 100vh;
 }
 
@@ -42,9 +83,9 @@ body {
   inset: -20% -10% auto;
   height: 420px;
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 107, 74, 0.18), transparent 55%),
-    radial-gradient(circle at 80% 10%, rgba(31, 138, 112, 0.18), transparent 60%),
-    radial-gradient(circle at 50% 90%, rgba(25, 56, 63, 0.12), transparent 65%);
+    radial-gradient(circle at 20% 20%, var(--glow-1), transparent 55%),
+    radial-gradient(circle at 80% 10%, var(--glow-2), transparent 60%),
+    radial-gradient(circle at 50% 90%, var(--glow-3), transparent 65%);
   pointer-events: none;
   filter: blur(10px);
   animation: float 16s ease-in-out infinite;
@@ -120,11 +161,45 @@ h4 {
 .source-card {
   padding: 16px 18px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.source-controls {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--stroke);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.source-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.language-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.language-toggle .ui-button[data-active="true"] {
+  background: var(--accent-2);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(31, 138, 112, 0.25);
 }
 
 .status-row {
@@ -229,7 +304,7 @@ button.primary:disabled {
 .tabs {
   display: flex;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface-soft);
   border-radius: 999px;
   padding: 4px;
   border: 1px solid var(--stroke);
@@ -251,6 +326,11 @@ button.primary:disabled {
   color: #fff;
 }
 
+:root[data-theme="dark"] .tab.active {
+  background: var(--accent-2);
+  color: #fff;
+}
+
 .module-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -260,7 +340,7 @@ button.primary:disabled {
 .module-card {
   padding: 18px 20px;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface-soft);
   border: 1px solid var(--stroke);
   box-shadow: 0 10px 24px rgba(20, 28, 32, 0.08);
   text-align: left;
@@ -334,7 +414,7 @@ button.primary:disabled {
 
 button.ghost {
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-ghost);
   padding: 10px 18px;
   border-radius: 999px;
   cursor: pointer;
@@ -352,7 +432,7 @@ a.ghost {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-ghost);
   padding: 10px 18px;
   border-radius: 999px;
   cursor: pointer;
@@ -468,7 +548,7 @@ a.ghost {
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   font-family: var(--font-sans);
 }
 
@@ -489,7 +569,7 @@ a.ghost {
 .date-picker {
   padding: 16px;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-solid);
   border: 1px solid var(--stroke);
   box-shadow: 0 12px 28px rgba(20, 28, 32, 0.08);
   display: grid;
@@ -555,7 +635,7 @@ a.ghost {
 .date-picker .rdp-nav_button {
   border-radius: 10px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   color: var(--ink);
 }
 
@@ -587,7 +667,7 @@ a.ghost {
 
 .toggle {
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--surface);
   color: var(--muted);
   padding: 8px 14px;
   border-radius: 999px;
@@ -632,7 +712,7 @@ a.ghost {
 .itinerary-card {
   padding: 18px 20px;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
@@ -704,7 +784,7 @@ a.ghost {
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   font-size: 0.85rem;
 }
@@ -780,7 +860,7 @@ a.ghost {
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-solid);
   display: grid;
   gap: 10px;
 }
@@ -873,7 +953,7 @@ a.ghost {
 .calendar-month {
   padding: 14px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
@@ -906,7 +986,7 @@ a.ghost {
   appearance: none;
   border: 1px solid var(--stroke);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--surface-solid);
   min-height: 32px;
   font-size: 0.78rem;
   font-weight: 600;
@@ -925,8 +1005,8 @@ a.ghost {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(28, 37, 42, 0.92);
-  color: #fff;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 0.7rem;
@@ -942,7 +1022,7 @@ a.ghost {
   transform: translateX(-50%);
   border-width: 6px;
   border-style: solid;
-  border-color: rgba(28, 37, 42, 0.92) transparent transparent transparent;
+  border-color: var(--tooltip-bg) transparent transparent transparent;
   z-index: 4;
 }
 
@@ -1031,7 +1111,7 @@ a.ghost {
   height: 12px;
   border-radius: 4px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
 }
 
 .legend-swatch.weekend {
@@ -1073,7 +1153,7 @@ a.ghost {
 
 .period-item {
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
@@ -1124,7 +1204,7 @@ a.ghost {
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   font-size: 0.85rem;
 }
@@ -1133,7 +1213,7 @@ a.ghost {
   padding: 32px;
   border-radius: var(--radius);
   border: 1px dashed var(--stroke);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--surface);
 }
 
 .map-grid {
@@ -1147,7 +1227,7 @@ a.ghost {
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   min-height: 360px;
 }
 
@@ -1165,7 +1245,7 @@ a.ghost {
   align-items: center;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--surface-strong);
   border: 1px solid var(--stroke);
   font-size: 0.75rem;
   color: var(--muted);
@@ -1203,7 +1283,7 @@ a.ghost {
   align-items: center;
   justify-content: center;
   text-align: center;
-  background: rgba(248, 244, 236, 0.72);
+  background: var(--map-overlay);
   font-weight: 600;
   color: var(--muted);
   padding: 20px;
@@ -1268,7 +1348,7 @@ a.ghost {
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   font-family: var(--font-sans);
 }
 
@@ -1316,7 +1396,7 @@ a.ghost {
 
 .multi-option {
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border-radius: 12px;
   padding: 8px 12px;
   display: flex;
@@ -1375,13 +1455,13 @@ a.ghost {
 }
 
 .ui-button--outline {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   border-color: var(--stroke);
   color: var(--ink);
 }
 
 .ui-button--outline:hover {
-  background: rgba(255, 255, 255, 1);
+  background: var(--surface-solid);
   border-color: rgba(18, 28, 32, 0.18);
 }
 
@@ -1412,12 +1492,50 @@ a.ghost {
   border-radius: 12px;
 }
 
+.ui-switch {
+  width: 42px;
+  height: 24px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: var(--switch-track);
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.ui-switch[data-state="checked"] {
+  background: var(--accent-2);
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(31, 138, 112, 0.25);
+}
+
+.ui-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--switch-thumb);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.ui-switch[data-state="checked"] .ui-switch-thumb {
+  transform: translateX(18px);
+}
+
+.ui-switch:focus-visible {
+  outline: 2px solid rgba(31, 138, 112, 0.4);
+  outline-offset: 2px;
+}
+
 .ui-input {
   width: 100%;
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
   font-family: var(--font-sans);
   font-size: 0.95rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -1464,7 +1582,7 @@ a.ghost {
 .ui-popover-content {
   border-radius: 18px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--surface-solid);
   box-shadow: var(--shadow);
   padding: 16px;
   width: clamp(280px, 62vw, 520px);
@@ -1480,7 +1598,7 @@ a.ghost {
 .command-input-wrapper {
   border: 1px solid var(--stroke);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--surface-solid);
   padding: 4px 10px;
 }
 
@@ -1735,7 +1853,7 @@ a.ghost {
 .highlight-card {
   padding: 18px 20px;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
@@ -1820,7 +1938,7 @@ a.ghost {
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px dashed var(--stroke);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   display: grid;
   gap: 8px;
 }
@@ -1957,7 +2075,7 @@ a.ghost {
   border-radius: 12px;
   padding: 10px 14px;
   font-family: var(--font-sans);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
 }
 
 .search input {
@@ -1966,6 +2084,7 @@ a.ghost {
   padding: 10px 16px;
   min-width: 240px;
   font-family: var(--font-sans);
+  background: var(--surface);
 }
 
 .muted {
@@ -1975,7 +2094,7 @@ a.ghost {
 .empty {
   text-align: center;
   padding: 80px 20px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--stroke);
 }

@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from travel_optimizer.core.models import BaseDayKind, DayInfo, LeaveKind, RestPeriod, TimeoffRequest, TimeoffResult
-from travel_optimizer.modules.timeoff.holidays import holiday_dates
+from travel_optimizer.modules.timeoff.holidays import holiday_dates, normalize_country_input
 
 DayMap = Dict[date, DayInfo]
 
@@ -257,7 +257,11 @@ def compute_score(day_map: DayMap) -> float:
 
 
 def optimize_timeoff(request: TimeoffRequest) -> TimeoffResult:
-    holidays = holiday_dates(request.year, request.country_code, request.subdivision_code)
+    country_code, subdivision_code = normalize_country_input(
+        request.country_code,
+        request.subdivision_code,
+    )
+    holidays = holiday_dates(request.year, country_code, subdivision_code)
     base_day_map = build_base_calendar(
         request.year,
         holiday_dates=holidays,
@@ -289,6 +293,6 @@ def optimize_timeoff(request: TimeoffRequest) -> TimeoffResult:
         score=score,
         best_month=best_month,
         efficiency_ranking=efficiency_ranking,
-        country_code=request.country_code,
-        subdivision_code=request.subdivision_code,
+        country_code=country_code,
+        subdivision_code=subdivision_code,
     )

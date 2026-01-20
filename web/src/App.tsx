@@ -16,7 +16,9 @@ import OriginCityPicker from "./components/OriginCityPicker";
 import OriginCountryPicker from "./components/OriginCountryPicker";
 import type { MultiSelectOption } from "./components/MultiSelect";
 import TimeoffCalendar from "./components/TimeoffCalendar";
+import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
+import { Switch } from "./components/ui/switch";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import {
@@ -32,6 +34,7 @@ import {
 } from "./utils/format";
 import { buildChaslesItineraries, type CountryIdentity } from "./utils/itinerary";
 import { continentOrder, getContinentLabel } from "./utils/continents";
+import { useI18n } from "./i18n";
 
 const selectTopFlights = (flights: FlightOption[]) => {
   const sortable = [...flights];
@@ -106,13 +109,6 @@ const escapeICS = (value: string) =>
     .replace(/,/g, "\\,")
     .replace(/;/g, "\\;");
 
-const haulOptions = [
-  { value: "short", label: "Short-haul (<3h)" },
-  { value: "medium", label: "Medium-haul (3-6h)" },
-  { value: "long", label: "Long-haul (6-12h)" },
-  { value: "ultra", label: "Ultra-long (12h+)" }
-];
-
 const makePeriodKey = (period: RestPeriod) => `${period.start_date}|${period.end_date}`;
 
 const safetyClass = (level?: string | null) => {
@@ -124,19 +120,33 @@ const safetyClass = (level?: string | null) => {
   return "safety-unknown";
 };
 
-const formatJobStatus = (status: JobInfo["status"]) => status.charAt(0).toUpperCase() + status.slice(1);
+type SourceState = { kind: "none" | "live" | "file"; label?: string };
+type ThemeMode = "light" | "dark";
 
-const formatJobKind = (kind: string) => kind.replace(/-/g, " ");
 const LARGE_SCAN_THRESHOLD = 1200;
+const THEME_STORAGE_KEY = "travel-optimizer-theme";
+
+const getInitialTheme = (): ThemeMode => {
+  if (typeof window === "undefined") return "light";
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
+  return "light";
+};
+
+const continentKeyFromLabel = (label: string) => label.toLowerCase().replace(/\s+/g, "-");
 
 export default function App() {
+  const { t, locale, setLocale } = useI18n();
+  const resolvedLocale = locale === "fr" ? "fr-FR" : "en-US";
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [data, setData] = useState<PipelineResult | null>(null);
-  const [source, setSource] = useState("No data loaded");
+  const [source, setSource] = useState<SourceState>({ kind: "none" });
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"optimizer" | "insights" | "queue">("optimizer");
   const [formatConfig, setFormatConfig] = useState<FormatConfig>(() => ({
-    locale: navigator.language || "fr-FR",
+    locale: resolvedLocale,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
     currency: "EUR"
   }));
@@ -186,6 +196,22 @@ export default function App() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    setFormatConfig((current) => ({ ...current, locale: resolvedLocale }));
+    setError(null);
+    setApiError(null);
+    setInsightsError(null);
+    setJobsError(null);
+    setOptionsError(null);
+  }, [resolvedLocale]);
+
+  useEffect(() => {
     const loadOptions = async () => {
       try {
         const [countriesRes, citiesRes] = await Promise.all([fetch("/countries.json"), fetch("/cities.json")]);
@@ -197,11 +223,11 @@ export default function App() {
         setCountries(countriesPayload);
         setCities(citiesPayload);
       } catch (err) {
-        setOptionsError("Location data missing. Run `make map-data` to regenerate.");
+        setOptionsError(t("error.missingLocationData"));
       }
     };
     loadOptions();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let active = true;
@@ -220,7 +246,7 @@ export default function App() {
           const payload = (await response.json()) as { meta?: { locale?: string; timezone?: string; currency?: string } };
           if (payload.meta) {
             setFormatConfig((current) => ({
-              locale: payload.meta?.locale ?? current.locale,
+              locale: resolvedLocale,
               timeZone: payload.meta?.timezone ?? current.timeZone,
               currency: payload.meta?.currency ?? current.currency
             }));
@@ -248,6 +274,36 @@ export default function App() {
     setSelectedPeriodKey(makePeriodKey(data.timeoff.rest_periods[0]));
   }, [data, selectedPeriodKey]);
 
+  const haulOptions = useMemo(
+    () => [
+      { value: "short", label: t("haul.short") },
+      { value: "medium", label: t("haul.medium") },
+      { value: "long", label: t("haul.long") },
+      { value: "ultra", label: t("haul.ultra") }
+    ],
+    [t]
+  );
+
+  const formatJobStatus = (status: JobInfo["status"]) => t(`job.status.${status}`);
+
+  const formatJobKind = (kind: string) => {
+    const translated = t(`job.kind.${kind}`);
+    return translated === `job.kind.${kind}` ? kind.replace(/-/g, " ") : translated;
+  };
+
+  const continentLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    continentOrder.forEach((label) => {
+      map.set(label, t(`continent.${continentKeyFromLabel(label)}`));
+    });
+    return map;
+  }, [t]);
+
+  const resolveContinentLabel = (name?: string | null) => {
+    const key = getContinentLabel(name);
+    return continentLabels.get(key) ?? t("continent.other");
+  };
+
   const countryCodeByName = useMemo(() => {
     const map = new Map<string, string>();
     countries.forEach((entry) => {
@@ -270,58 +326,64 @@ export default function App() {
   }, [countries]);
 
   const preferredCountryOptions = useMemo<MultiSelectOption[]>(() => {
-    const ranks = new Map(continentOrder.map((label, index) => [label, index]));
+    const ranks = new Map(
+      continentOrder.map((label, index) => [continentLabels.get(label) ?? label, index])
+    );
     const options = countries.map((entry) => ({
       value: entry.name,
       label: entry.name,
       hint: entry.code ?? undefined,
       flag: flagEmoji(entry.code),
-      group: getContinentLabel(entry.name)
+      group: resolveContinentLabel(entry.name)
     }));
     options.sort((a, b) => {
-      const rankA = ranks.get(a.group ?? "Other") ?? ranks.size;
-      const rankB = ranks.get(b.group ?? "Other") ?? ranks.size;
+      const rankA = ranks.get(a.group ?? t("continent.other")) ?? ranks.size;
+      const rankB = ranks.get(b.group ?? t("continent.other")) ?? ranks.size;
       if (rankA !== rankB) return rankA - rankB;
       return a.label.localeCompare(b.label);
     });
     return options;
-  }, [countries]);
+  }, [countries, continentLabels, resolveContinentLabel, t]);
 
   const originCountryOptions = useMemo<MultiSelectOption[]>(() => {
-    const ranks = new Map(continentOrder.map((label, index) => [label, index]));
+    const ranks = new Map(
+      continentOrder.map((label, index) => [continentLabels.get(label) ?? label, index])
+    );
     const options = countries.map((entry) => ({
       value: entry.name,
       label: entry.name,
       hint: entry.code ?? undefined,
       flag: flagEmoji(entry.code),
-      group: getContinentLabel(entry.name)
+      group: resolveContinentLabel(entry.name)
     }));
     options.sort((a, b) => {
-      const rankA = ranks.get(a.group ?? "Other") ?? ranks.size;
-      const rankB = ranks.get(b.group ?? "Other") ?? ranks.size;
+      const rankA = ranks.get(a.group ?? t("continent.other")) ?? ranks.size;
+      const rankB = ranks.get(b.group ?? t("continent.other")) ?? ranks.size;
       if (rankA !== rankB) return rankA - rankB;
       return a.label.localeCompare(b.label);
     });
     return options;
-  }, [countries]);
+  }, [countries, continentLabels, resolveContinentLabel, t]);
 
   const insightsCountryOptions = useMemo<MultiSelectOption[]>(() => {
-    const ranks = new Map(continentOrder.map((label, index) => [label, index]));
+    const ranks = new Map(
+      continentOrder.map((label, index) => [continentLabels.get(label) ?? label, index])
+    );
     const options = countries.map((entry) => ({
       value: entry.name,
       label: entry.name,
       hint: entry.code ?? undefined,
       flag: flagEmoji(entry.code),
-      group: getContinentLabel(entry.name)
+      group: resolveContinentLabel(entry.name)
     }));
     options.sort((a, b) => {
-      const rankA = ranks.get(a.group ?? "Other") ?? ranks.size;
-      const rankB = ranks.get(b.group ?? "Other") ?? ranks.size;
+      const rankA = ranks.get(a.group ?? t("continent.other")) ?? ranks.size;
+      const rankB = ranks.get(b.group ?? t("continent.other")) ?? ranks.size;
       if (rankA !== rankB) return rankA - rankB;
       return a.label.localeCompare(b.label);
     });
     return options;
-  }, [countries]);
+  }, [countries, continentLabels, resolveContinentLabel, t]);
 
   const cityOptions = useMemo<MultiSelectOption[]>(() => {
     if (!cities.length) return [];
@@ -356,12 +418,12 @@ export default function App() {
         value: city,
         label: city,
         hint: codesList.length ? codesList.join(", ") : undefined,
-        group: city ? city[0].toUpperCase() : "Cities"
+        group: city ? city[0].toUpperCase() : t("label.cities")
       };
     });
     options.sort((a, b) => a.label.localeCompare(b.label));
     return options;
-  }, [cities, homeCountry]);
+  }, [cities, homeCountry, t]);
 
   const homeCitySet = useMemo(() => new Set(homeCityPickerOptions.map((option) => option.value)), [homeCityPickerOptions]);
 
@@ -388,12 +450,12 @@ export default function App() {
         value: city,
         label: city,
         hint: codesList.length ? codesList.join(", ") : undefined,
-        group: city ? city[0].toUpperCase() : "Cities"
+        group: city ? city[0].toUpperCase() : t("label.cities")
       };
     });
     options.sort((a, b) => a.label.localeCompare(b.label));
     return options;
-  }, [insightsOriginCities]);
+  }, [insightsOriginCities, t]);
 
   const insightsOriginCitySet = useMemo(
     () => new Set(insightsOriginCityOptions.map((option) => option.value)),
@@ -404,8 +466,8 @@ export default function App() {
     if (insightsOriginCity) {
       return insightsOriginCountry ? `${insightsOriginCity}, ${insightsOriginCountry.name}` : insightsOriginCity;
     }
-    return insightsOriginCountry?.name ?? "Origin";
-  }, [insightsOriginCity, insightsOriginCountry]);
+    return insightsOriginCountry?.name ?? t("label.origin");
+  }, [insightsOriginCity, insightsOriginCountry, t]);
 
   const insightCountryList = useMemo<CountryIdentity[]>(() => {
     const unique = new Map<string, CountryIdentity>();
@@ -442,11 +504,11 @@ export default function App() {
   );
 
   const tripRangeLabel = useMemo(() => {
-    if (!tripRange.minDays) return "--";
+    if (!tripRange.minDays) return t("common.na");
     return tripRange.minDays === tripRange.maxDays
-      ? `${tripRange.minDays} days`
-      : `${tripRange.minDays}-${tripRange.maxDays} days`;
-  }, [tripRange.minDays, tripRange.maxDays]);
+      ? t("count.days", { count: tripRange.minDays })
+      : t("label.daysRange", { min: tripRange.minDays, max: tripRange.maxDays });
+  }, [tripRange.minDays, tripRange.maxDays, t]);
 
   const departWindowDays = useMemo(() => countDaysInclusive(departStart, departEnd), [departStart, departEnd]);
   const returnWindowDays = useMemo(() => countDaysInclusive(returnStart, returnEnd), [returnStart, returnEnd]);
@@ -520,7 +582,7 @@ export default function App() {
   const formatMonthsValue = (months?: number[] | null) => formatMonths(months, formatConfig);
   const restRange = (period: RestPeriod) => `${formatDateValue(period.start_date)} - ${formatDateValue(period.end_date)}`;
   const highlightLabel = (flight: FlightOption | null, metric: string) => {
-    if (!flight) return { route: "--", metric, date: "" };
+    if (!flight) return { route: t("common.na"), metric, date: "" };
     return {
       route: `${flight.origin_iata} → ${flight.destination_iata}`,
       metric,
@@ -592,12 +654,12 @@ export default function App() {
 
   const fewestStopsMetric =
     flightHighlights && typeof flightHighlights.fewestStops?.stops === "number"
-      ? `${flightHighlights.fewestStops.stops} stops`
-      : "--";
+      ? t("label.stopsCount", { count: flightHighlights.fewestStops.stops })
+      : t("common.na");
   const bestScoreMetric =
     flightHighlights && typeof flightHighlights.bestScore?.score === "number"
-      ? `${flightHighlights.bestScore.score.toFixed(1)} score`
-      : "--";
+      ? t("label.scoreValue", { score: flightHighlights.bestScore.score.toFixed(1) })
+      : t("common.na");
 
   const periodDetails = useMemo(() => {
     if (!data) return [];
@@ -656,20 +718,20 @@ export default function App() {
       try {
         const payload = JSON.parse(reader.result as string) as PipelineResult;
         setData(payload);
-        setSource(file.name);
+        setSource({ kind: "file", label: file.name });
         setError(null);
         setLastPipelineRun(new Date().toISOString());
         setSelectedPeriodKey(null);
         setHoveredPeriodKey(null);
         if (payload.meta) {
           setFormatConfig((current) => ({
-            locale: payload.meta?.locale ?? current.locale,
+            locale: resolvedLocale,
             timeZone: payload.meta?.timezone ?? current.timeZone,
             currency: payload.meta?.currency ?? current.currency
           }));
         }
       } catch (err) {
-        setError("Invalid JSON file.");
+        setError(t("error.invalidJson"));
       }
     };
     reader.readAsText(file);
@@ -689,7 +751,7 @@ export default function App() {
 
   const handleClear = () => {
     setData(null);
-    setSource("No data loaded");
+    setSource({ kind: "none" });
     setError(null);
     setSelectedPeriodKey(null);
     setHoveredPeriodKey(null);
@@ -725,17 +787,24 @@ export default function App() {
     };
 
     data.timeoff.rest_periods.forEach((period) => {
-      pushEvent("Rest window", period.start_date, addDays(period.end_date, 1), "Optimized rest window");
+      pushEvent(
+        t("calendar.ics.restWindow"),
+        period.start_date,
+        addDays(period.end_date, 1),
+        t("calendar.ics.restWindowDesc")
+      );
     });
 
     data.timeoff.day_map.forEach((day) => {
       if (day.leave && day.leave !== "NONE") {
-        const summary = day.reason ? day.reason : "Optimized leave";
+        const summary = day.reason ? day.reason : t("calendar.ics.optimizedLeave");
         pushEvent(summary, day.date, addDays(day.date, 1));
         return;
       }
       if (day.base_kind === "HOLIDAY") {
-        const summary = day.holiday_name ? `Holiday: ${day.holiday_name}` : "Holiday";
+        const summary = day.holiday_name
+          ? t("calendar.ics.holidayNamed", { name: day.holiday_name })
+          : t("calendar.ics.holiday");
         pushEvent(summary, day.date, addDays(day.date, 1));
       }
     });
@@ -828,7 +897,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      setJobsError(err instanceof Error ? err.message : "Unable to fetch job queue.");
+      setJobsError(err instanceof Error ? err.message : t("error.unableFetchQueue"));
     } finally {
       if (showLoading) setJobsLoading(false);
     }
@@ -855,32 +924,36 @@ export default function App() {
     setApiError(null);
     if (running) return;
     if (apiStatus === "offline") {
-      setApiError("API is offline. Start the backend before running the optimizer.");
+      setApiError(t("error.apiOffline"));
       return;
     }
     if (!Number.isFinite(year) || year < 1900 || year > 2100) {
-      setApiError("Enter a valid year between 1900 and 2100.");
+      setApiError(t("error.invalidYear"));
       return;
     }
     if (!Number.isFinite(leaveDays) || leaveDays < 0 || leaveDays > 365) {
-      setApiError("Leave days must be between 0 and 365.");
+      setApiError(t("error.invalidLeaveDays"));
       return;
     }
     if (!Number.isFinite(minRest) || minRest < 1 || minRest > 60) {
-      setApiError("Minimum rest window must be between 1 and 60 days.");
+      setApiError(t("error.invalidMinRest"));
       return;
     }
     if (!homeCountry) {
-      setApiError("Select a country of residence before running the optimizer.");
+      setApiError(t("error.missingHomeCountry"));
       return;
     }
     if (!homeCountry.code) {
-      setApiError("Selected country is missing a valid code.");
+      setApiError(t("error.invalidHomeCountryCode"));
+      return;
+    }
+    if (!preferredCountries.length && !preferredCities.length) {
+      setApiError(t("error.missingPreferredDestinations"));
       return;
     }
     const homeCityValue = homeCity.trim();
     if (homeCityValue && !homeCitySet.has(homeCityValue)) {
-      setApiError("Select a home city from the list or clear the field.");
+      setApiError(t("error.invalidHomeCity"));
       return;
     }
 
@@ -913,20 +986,20 @@ export default function App() {
       }
       const result = (await response.json()) as PipelineResult;
       setData(result);
-      setSource("Live API");
+      setSource({ kind: "live" });
       setError(null);
       setLastPipelineRun(new Date().toISOString());
       setSelectedPeriodKey(null);
       setHoveredPeriodKey(null);
       if (result.meta) {
         setFormatConfig((current) => ({
-          locale: result.meta?.locale ?? current.locale,
+          locale: resolvedLocale,
           timeZone: result.meta?.timezone ?? current.timeZone,
           currency: result.meta?.currency ?? current.currency
         }));
       }
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Unable to run optimizer.");
+      setApiError(err instanceof Error ? err.message : t("error.unableRunOptimizer"));
     } finally {
       setRunning(false);
     }
@@ -935,16 +1008,16 @@ export default function App() {
   const handleInsights = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!insightsOriginCountry) {
-      setInsightsError("Select an origin country before running flight insights.");
+      setInsightsError(t("error.missingInsightsOriginCountry"));
       return;
     }
     if (!insightsCountries.length) {
-      setInsightsError("Select at least one destination country.");
+      setInsightsError(t("error.missingInsightsDestinations"));
       return;
     }
     const originCityValue = insightsOriginCity.trim();
     if (originCityValue && !insightsOriginCitySet.has(originCityValue)) {
-      setInsightsError("Select an origin city from the list or clear the field.");
+      setInsightsError(t("error.invalidInsightsOriginCity"));
       return;
     }
     const departStartDate = parseISODate(departStart);
@@ -952,23 +1025,23 @@ export default function App() {
     const returnStartDate = parseISODate(returnStart);
     const returnEndDate = parseISODate(returnEnd);
     if (departStartDate > departEndDate) {
-      setInsightsError("Departure window start must be before the end date.");
+      setInsightsError(t("error.invalidDepartureWindow"));
       return;
     }
     if (returnStartDate > returnEndDate) {
-      setInsightsError("Return window start must be before the end date.");
+      setInsightsError(t("error.invalidReturnWindow"));
       return;
     }
     if (returnStartDate < departStartDate) {
-      setInsightsError("Return window must start on or after the departure window.");
+      setInsightsError(t("error.invalidReturnAfterDeparture"));
       return;
     }
     if (isLargeScan && !confirmLargeScan) {
-      setInsightsError(`This scan includes ${datePairCount} date combinations. Confirm to proceed.`);
+      setInsightsError(t("error.confirmLargeScan", { count: datePairCount }));
       return;
     }
     if (hasSameActiveInsightsJob && !confirmRerun) {
-      setInsightsError("An identical scan is already running. Confirm to re-run anyway.");
+      setInsightsError(t("error.confirmRerun"));
       return;
     }
     setInsightsLoading(true);
@@ -1001,7 +1074,7 @@ export default function App() {
       setTab("queue");
       await refreshJobs(true);
     } catch (err) {
-      setInsightsError(err instanceof Error ? err.message : "Unable to queue flight insights.");
+      setInsightsError(err instanceof Error ? err.message : t("error.unableQueueInsights"));
     } finally {
       setInsightsLoading(false);
     }
@@ -1021,14 +1094,14 @@ export default function App() {
         setTab("insights");
         if (payload.result.meta) {
           setFormatConfig((current) => ({
-            locale: payload.result?.meta?.locale ?? current.locale,
+            locale: resolvedLocale,
             timeZone: payload.result?.meta?.timezone ?? current.timeZone,
             currency: payload.result?.meta?.currency ?? current.currency
           }));
         }
       }
     } catch (err) {
-      setJobsError(err instanceof Error ? err.message : "Unable to load job results.");
+      setJobsError(err instanceof Error ? err.message : t("error.unableLoadJobResults"));
     }
   };
 
@@ -1041,14 +1114,14 @@ export default function App() {
       }
       await refreshJobs(false);
     } catch (err) {
-      setJobsError(err instanceof Error ? err.message : "Unable to cancel job.");
+      setJobsError(err instanceof Error ? err.message : t("error.unableCancelJob"));
     }
   };
 
   const getDestinationLabel = (destination: DestinationSuggestion | null) => {
-    if (!destination) return "Pending";
+    if (!destination) return t("label.pending");
     const flag = flagEmoji(destination.country_code ?? countryCodeByName.get(destination.country));
-    const cities = destination.cities.length ? destination.cities.join(", ") : "General";
+    const cities = destination.cities.length ? destination.cities.join(", ") : t("label.general");
     return `${flag ? `${flag} ` : ""}${destination.country} · ${cities}`;
   };
 
@@ -1056,19 +1129,36 @@ export default function App() {
     <div className="insight-card">
       <div className="insight-header">
         <h4>{title}</h4>
-        <span className="chip">Top {options.length}</span>
+        <span className="chip">{t("label.topCount", { count: options.length })}</span>
       </div>
       <div className="insight-list">
         {options.length ? (
           options.map((option, index) => {
             const durationLabel = option.duration ? option.duration : formatDuration(option.total_duration_min);
-            const carrierLabel = option.flight_name ? `Carrier: ${option.flight_name}` : "Carrier: --";
+            const carrierLabel = option.flight_name
+              ? t("label.carrierValue", { value: option.flight_name })
+              : t("label.carrierUnknown");
             const timeLabel =
               option.departure_time && option.arrival_time
-                ? `${option.departure_time} → ${option.arrival_time}${option.arrival_time_ahead ? ` (${option.arrival_time_ahead})` : ""}`
-                : "Times: --";
-            const routeLabel = (option.itinerary_route ?? option.segment_route_group ?? "--").replace(/>/g, " → ");
-            const tripLabel = option.trip_type ? option.trip_type.replace("-", " ") : "trip";
+                ? t("label.timesValue", {
+                    value: `${option.departure_time} → ${option.arrival_time}${
+                      option.arrival_time_ahead ? ` (${option.arrival_time_ahead})` : ""
+                    }`
+                  })
+                : t("label.timesUnknown");
+            const routeLabel = (option.itinerary_route ?? option.segment_route_group ?? t("common.na")).replace(
+              />/g,
+              " → "
+            );
+            const tripLabel = option.trip_type
+              ? (() => {
+                  const key = `label.tripType.${option.trip_type}`;
+                  const translated = t(key);
+                  return translated === key ? option.trip_type.replace("-", " ") : translated;
+                })()
+              : t("label.tripDefault");
+            const stopsLabel =
+              typeof option.stops === "number" ? t("label.stopsCount", { count: option.stops }) : t("common.na");
             return (
               <div key={`${option.origin_iata}-${option.destination_iata}-${index}`} className="insight-row">
                 <div>
@@ -1077,7 +1167,7 @@ export default function App() {
                   </strong>
                   <p className="muted">
                     {formatDateValue(option.depart_date)} ·{" "}
-                    {option.return_date ? formatDateValue(option.return_date) : "One-way"}
+                    {option.return_date ? formatDateValue(option.return_date) : t("label.oneWay")}
                   </p>
                   <p className="insight-sub">{carrierLabel}</p>
                   <p className="insight-sub">{timeLabel}</p>
@@ -1088,13 +1178,13 @@ export default function App() {
                 <div className="insight-metrics">
                   <span>{formatCurrencyValue(option.price, insights?.summary.currency)}</span>
                   <span>{durationLabel}</span>
-                  <span>{option.stops ?? "--"} stops</span>
+                  <span>{stopsLabel}</span>
                 </div>
               </div>
             );
           })
         ) : (
-          <p className="muted">No options available.</p>
+          <p className="muted">{t("empty.noOptions")}</p>
         )}
       </div>
     </div>
@@ -1112,7 +1202,8 @@ export default function App() {
     );
   };
 
-  const apiLabel = apiStatus === "online" ? "API online" : apiStatus === "offline" ? "API offline" : "API checking";
+  const apiLabel = t(`status.api.${apiStatus}`);
+  const sourceValue = source.kind === "file" ? source.label ?? t("source.file") : t(`source.${source.kind}`);
   const originFlag = flagEmoji(insightsOriginCountry?.code);
   const hasItineraryInputs = insightCountryList.length > 0 && tripRange.minDays > 0;
   const insightsReport = insights?.artifacts?.report_excel;
@@ -1123,86 +1214,131 @@ export default function App() {
       <header className="hero" data-animate>
         <div className="hero-top">
           <div>
-            <p className="eyebrow">Travel Optimizer</p>
-            <h1>Precision travel planning, distilled.</h1>
-            <p className="subtitle">
-              Two distinct modules: a leave-based destination advisor and a date-range flight insights scanner.
-            </p>
+            <p className="eyebrow">{t("app.name")}</p>
+            <h1>{t("app.heroTitle")}</h1>
+            <p className="subtitle">{t("app.heroSubtitle")}</p>
           </div>
           <div className="source-card">
             {tab === "optimizer" ? (
               <>
-                <span className="source-label">Loaded</span>
-                <span className="source-value">{source}</span>
+                <span className="source-label">{t("source.loadedLabel")}</span>
+                <span className="source-value">{sourceValue}</span>
                 <div className="status-row">
                   <span className={`status-pill ${apiStatus}`}>
                     <span className="status-dot" />
                     {apiLabel}
                   </span>
-                  <span className="status-meta">Last run {formatDateTimeValue(lastPipelineRun)}</span>
+                  <span className="status-meta">
+                    {t("status.lastRun", { time: formatDateTimeValue(lastPipelineRun) })}
+                  </span>
                 </div>
                 {data ? (
                   <div className="source-meta">
-                    <span>{data.destinations.length} destinations</span>
-                    <span>{data.flights.length} flights</span>
-                    <span>{data.itineraries.length} itineraries</span>
+                    <span>{t("count.destinations", { count: data.destinations.length })}</span>
+                    <span>{t("count.flights", { count: data.flights.length })}</span>
+                    <span>{t("count.itineraries", { count: data.itineraries.length })}</span>
                   </div>
                 ) : (
-                  <span className="source-hint">Run the optimizer to generate results.</span>
+                  <span className="source-hint">{t("source.optimizerHint")}</span>
                 )}
               </>
             ) : tab === "insights" ? (
               <>
-                <span className="source-label">Insights</span>
-                <span className="source-value">{insights ? "Latest scan ready" : "No scan yet"}</span>
+                <span className="source-label">{t("source.insightsLabel")}</span>
+                <span className="source-value">
+                  {insights ? t("source.latestScanReady") : t("source.noScanYet")}
+                </span>
                 <div className="status-row">
                   <span className={`status-pill ${apiStatus}`}>
                     <span className="status-dot" />
                     {apiLabel}
                   </span>
-                  <span className="status-meta">Last scan {formatDateTimeValue(lastInsightsRun)}</span>
+                  <span className="status-meta">
+                    {t("status.lastScan", { time: formatDateTimeValue(lastInsightsRun) })}
+                  </span>
                 </div>
                 {insights ? (
                   <div className="source-meta">
-                    <span>{insights.summary.options} options</span>
-                    <span>{insights.summary.origin_airports.join(", ") || "--"} origin</span>
-                    <span>{insights.summary.destination_airports.length} destinations</span>
+                    <span>{t("count.options", { count: insights.summary.options })}</span>
+                    <span>
+                      {insights.summary.origin_airports.join(", ") || t("common.na")} {t("label.originShort")}
+                    </span>
+                    <span>{t("count.destinations", { count: insights.summary.destination_airports.length })}</span>
                   </div>
                 ) : (
-                  <span className="source-hint">Run a flight insights scan to populate this view.</span>
+                  <span className="source-hint">{t("source.insightsHint")}</span>
                 )}
               </>
             ) : (
               <>
-                <span className="source-label">Queue</span>
-                <span className="source-value">{jobs.length ? `${jobs.length} jobs` : "No jobs yet"}</span>
+                <span className="source-label">{t("source.queueLabel")}</span>
+                <span className="source-value">
+                  {jobs.length ? t("count.jobs", { count: jobs.length }) : t("source.noJobsYet")}
+                </span>
                 <div className="status-row">
                   <span className={`status-pill ${apiStatus}`}>
                     <span className="status-dot" />
                     {apiLabel}
                   </span>
-                  <span className="status-meta">{hasActiveJobs ? "Active jobs running" : "Queue idle"}</span>
+                  <span className="status-meta">
+                    {hasActiveJobs ? t("status.activeJobs") : t("status.queueIdle")}
+                  </span>
                 </div>
                 {activeJobId ? (
-                  <span className="source-hint">Tracking job {activeJobId}</span>
+                  <span className="source-hint">{t("source.trackingJob", { id: activeJobId })}</span>
                 ) : (
-                  <span className="source-hint">Run flight insights to queue a job.</span>
+                  <span className="source-hint">{t("source.queueHint")}</span>
                 )}
               </>
             )}
+            <div className="source-controls">
+              <div className="source-control">
+                <span className="source-label">{t("theme.label")}</span>
+                <div className="switch-row">
+                  <span className="muted">{t("theme.light")}</span>
+                  <Switch
+                    checked={theme === "dark"}
+                    onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                    aria-label={t("action.toggleTheme")}
+                  />
+                  <span className="muted">{t("theme.dark")}</span>
+                </div>
+              </div>
+              <div className="source-control">
+                <span className="source-label">{t("language.label")}</span>
+                <div className="language-toggle">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocale("en")}
+                    data-active={locale === "en"}
+                  >
+                    EN
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocale("fr")}
+                    data-active={locale === "fr"}
+                  >
+                    FR
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         {tab === "optimizer" && (
           <div className="controls" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
             <label className="upload">
               <input type="file" accept="application/json" onChange={handleFileInput} />
-              <span>Upload JSON</span>
+              <span>{t("action.uploadJson")}</span>
             </label>
             <button className="ghost" type="button" onClick={handleClear}>
-              Clear
+              {t("action.clear")}
             </button>
             <button className="ghost" type="button" onClick={handleExport} disabled={!data}>
-              Download JSON
+              {t("action.downloadJson")}
             </button>
             {error && <span className="error">{error}</span>}
           </div>
@@ -1212,8 +1348,8 @@ export default function App() {
       <section className="section control-panel" data-animate>
         <div className="section-header">
           <div>
-            <p className="eyebrow">Mission control</p>
-            <h2>Choose the right module</h2>
+            <p className="eyebrow">{t("nav.missionControl")}</p>
+            <h2>{t("nav.chooseModule")}</h2>
           </div>
         </div>
         <div className="module-grid">
@@ -1223,14 +1359,11 @@ export default function App() {
             onClick={() => setTab("optimizer")}
           >
             <div className="module-card-header">
-              <span className="module-badge">Module 1</span>
-              <span className="module-tag">Leave-based destinations</span>
+              <span className="module-badge">{t("module.oneBadge")}</span>
+              <span className="module-tag">{t("module.oneTag")}</span>
             </div>
-            <h3>Advisor: optimized leave → countries & cities</h3>
-            <p className="muted">
-              Inputs: year, leave days, home country/city, and minimum rest. Outputs: optimized calendar plus destination
-              recommendations.
-            </p>
+            <h3>{t("module.oneTitle")}</h3>
+            <p className="muted">{t("module.oneDesc")}</p>
           </button>
           <button
             type="button"
@@ -1238,26 +1371,21 @@ export default function App() {
             onClick={() => setTab("insights")}
           >
             <div className="module-card-header">
-              <span className="module-badge">Module 2</span>
-              <span className="module-tag">Date-range flight insights</span>
+              <span className="module-badge">{t("module.twoBadge")}</span>
+              <span className="module-tag">{t("module.twoTag")}</span>
             </div>
-            <h3>Flight stats: depart/return windows → top results</h3>
-            <p className="muted">
-              Inputs: origin country/city, destination countries, departure and return windows. Outputs: top 3 flights by
-              price, duration, stops, and score.
-            </p>
+            <h3>{t("module.twoTitle")}</h3>
+            <p className="muted">{t("module.twoDesc")}</p>
           </button>
         </div>
         {optionsError && <p className="error">{optionsError}</p>}
         {tab === "optimizer" ? (
           <form className="panel-grid" onSubmit={handleRun}>
             <div className="panel-card">
-              <h3>Leave setup</h3>
-              <p className="muted">
-                This module suggests destinations based on your leave days, year, and home location.
-              </p>
+              <h3>{t("section.leaveSetup")}</h3>
+              <p className="muted">{t("section.leaveSetupDesc")}</p>
               <div className="field">
-                <label>Year</label>
+                <label>{t("field.year")}</label>
                 <Input
                   type="number"
                   min={2000}
@@ -1266,7 +1394,7 @@ export default function App() {
                 />
               </div>
               <div className="field">
-                <label>Leave days</label>
+                <label>{t("field.leaveDays")}</label>
                 <Input
                   type="number"
                   min={0}
@@ -1275,7 +1403,7 @@ export default function App() {
                 />
               </div>
               <div className="field">
-                <label>Minimum rest window</label>
+                <label>{t("field.minRest")}</label>
                 <Input
                   type="number"
                   min={1}
@@ -1284,7 +1412,7 @@ export default function App() {
                 />
               </div>
               <div className="field">
-                <label>Country of residence</label>
+                <label>{t("field.countryResidence")}</label>
                 <OriginCountryPicker
                   options={originCountryOptions}
                   value={homeCountry?.name ?? null}
@@ -1293,64 +1421,65 @@ export default function App() {
                     setHomeCountry(match);
                     setHomeCity("");
                   }}
-                  placeholder="Select a country"
-                  emptyMessage="No countries found"
-                  title="Country of residence"
-                  subtitle="Sets the holiday calendar and home base."
-                  badgeFallback="Residence"
-                  searchPlaceholder="Search countries"
+                  placeholder={t("picker.country.placeholder")}
+                  emptyMessage={t("picker.country.empty")}
+                  title={t("picker.homeCountry.title")}
+                  subtitle={t("picker.homeCountry.subtitle")}
+                  badgeFallback={t("picker.homeCountry.badge")}
+                  searchPlaceholder={t("picker.country.search")}
                 />
               </div>
               <div className="field">
-                <label>Home city</label>
+                <label>{t("field.homeCity")}</label>
                 <OriginCityPicker
                   options={homeCityPickerOptions}
                   value={homeCity || null}
                   onChange={(nextValue) => setHomeCity(nextValue ?? "")}
-                  placeholder={homeCountry ? "Select a home city" : "Select a country first"}
-                  emptyMessage={homeCountry ? "No cities found" : "Select a country first"}
+                  placeholder={homeCountry ? t("picker.city.placeholder") : t("picker.city.placeholderDisabled")}
+                  emptyMessage={homeCountry ? t("picker.city.empty") : t("picker.city.emptyDisabled")}
                   disabled={!homeCountry}
-                  title="Home city"
-                  subtitle="Used to match nearby airports."
-                  badgeFallback="City"
-                  searchPlaceholder="Search cities"
+                  title={t("picker.homeCity.title")}
+                  subtitle={t("picker.homeCity.subtitle")}
+                  badgeFallback={t("picker.homeCity.badge")}
+                  searchPlaceholder={t("picker.city.search")}
                 />
               </div>
             </div>
 
             <div className="panel-card">
-              <h3>Destination filters</h3>
+              <h3>{t("section.destinationFilters")}</h3>
+              <p className="muted">{t("section.destinationFiltersHelp")}</p>
               <div className="field">
-                <label>Preferred cities</label>
+                <label>{t("field.preferredCities")}</label>
                 <DestinationCountryPicker
                   options={cityOptions}
                   selected={preferredCities}
                   onChange={setPreferredCities}
-                  placeholder="Select preferred cities"
-                  emptyMessage="No cities found"
-                  title="Preferred cities"
-                  subtitle="Search and pin cities you want to prioritize."
-                  searchPlaceholder="Search cities"
-                  emptyState="No preferred cities selected yet."
+                  placeholder={t("picker.preferredCities.placeholder")}
+                  emptyMessage={t("picker.preferredCities.empty")}
+                  title={t("picker.preferredCities.title")}
+                  subtitle={t("picker.preferredCities.subtitle")}
+                  searchPlaceholder={t("picker.preferredCities.search")}
+                  emptyState={t("picker.preferredCities.emptyState")}
                   maxVisible={200}
                 />
               </div>
               <div className="field">
-                <label>Preferred countries</label>
+                <label>{t("field.preferredCountries")}</label>
                 <DestinationCountryPicker
                   options={preferredCountryOptions}
                   selected={preferredCountries}
                   onChange={setPreferredCountries}
-                  placeholder="Select preferred countries"
-                  emptyMessage="No countries found"
-                  title="Preferred countries"
-                  subtitle="Focus recommendations on these countries."
-                  searchPlaceholder="Search countries"
-                  emptyState="No preferred countries selected yet."
+                  placeholder={t("picker.preferredCountries.placeholder")}
+                  emptyMessage={t("picker.preferredCountries.empty")}
+                  title={t("picker.preferredCountries.title")}
+                  subtitle={t("picker.preferredCountries.subtitle")}
+                  searchPlaceholder={t("picker.preferredCountries.search")}
+                  emptyState={t("picker.preferredCountries.emptyState")}
                 />
               </div>
               <div className="field">
-                <label>Haul types</label>
+                <label>{t("field.haulTypes")}</label>
                 <div className="toggle-group">
                   {haulOptions.map((option) => (
                     <button
@@ -1371,26 +1500,24 @@ export default function App() {
                 </div>
               </div>
               <button className="ghost" type="button" onClick={handleResetFilters}>
-                Reset filters
+                {t("action.resetFilters")}
               </button>
             </div>
 
             <div className="panel-card">
-              <h3>Run optimizer</h3>
-              <p className="muted">
-                The optimizer will compute the best leave windows and refresh destinations based on your filters.
-              </p>
+              <h3>{t("section.runOptimizer")}</h3>
+              <p className="muted">{t("section.runOptimizerDesc")}</p>
               <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={fastMode}
                   onChange={(event) => setFastMode(event.target.checked)}
                 />
-                Fast mode (skip flight search)
+                {t("label.fastMode")}
               </label>
-              <span className="helper-text">Flight search can take several minutes; use insights when ready.</span>
+              <span className="helper-text">{t("helper.fastMode")}</span>
               <button className="primary" type="submit" disabled={running}>
-                {running ? "Running..." : "Launch optimization"}
+                {running ? t("status.running") : t("action.launchOptimization")}
               </button>
               {apiError && <p className="error">{apiError}</p>}
             </div>
@@ -1398,9 +1525,9 @@ export default function App() {
         ) : tab === "insights" ? (
           <form className="panel-grid" onSubmit={handleInsights}>
             <div className="panel-card">
-              <h3>Origin and dates</h3>
+              <h3>{t("section.originDates")}</h3>
               <div className="field">
-                <label>Origin country</label>
+                <label>{t("field.originCountry")}</label>
                 <OriginCountryPicker
                   options={originCountryOptions}
                   value={insightsOriginCountry?.name ?? null}
@@ -1409,27 +1536,41 @@ export default function App() {
                     setInsightsOriginCountry(match);
                     setInsightsOriginCity("");
                   }}
-                  placeholder="Select a country"
-                  emptyMessage="No countries found"
+                  placeholder={t("picker.country.placeholder")}
+                  emptyMessage={t("picker.country.empty")}
+                  title={t("picker.originCountry.title")}
+                  subtitle={t("picker.originCountry.subtitle")}
+                  badgeFallback={t("picker.originCountry.badge")}
+                  searchPlaceholder={t("picker.country.search")}
                 />
               </div>
               <div className="field">
-                <label>Origin city</label>
+                <label>{t("field.originCity")}</label>
                 <OriginCityPicker
                   options={insightsOriginCityOptions}
                   value={insightsOriginCity || null}
                   onChange={(nextValue) => setInsightsOriginCity(nextValue ?? "")}
-                  placeholder={insightsOriginCountry ? "Select origin city" : "Select origin country first"}
-                  emptyMessage={insightsOriginCountry ? "No cities found" : "Select an origin country first"}
+                  placeholder={
+                    insightsOriginCountry
+                      ? t("picker.originCity.placeholder")
+                      : t("picker.originCity.placeholderDisabled")
+                  }
+                  emptyMessage={
+                    insightsOriginCountry ? t("picker.originCity.empty") : t("picker.originCity.emptyDisabled")
+                  }
                   disabled={!insightsOriginCountry}
+                  title={t("picker.originCity.title")}
+                  subtitle={t("picker.originCity.subtitle")}
+                  badgeFallback={t("picker.originCity.badge")}
+                  searchPlaceholder={t("picker.originCity.search")}
                 />
               </div>
               <div className="date-panel">
                 <div className="date-picker">
                   <div className="date-picker-header">
                     <div>
-                      <label>Departure window</label>
-                      <p className="muted">Pick a date range.</p>
+                      <label>{t("label.departureWindow")}</label>
+                      <p className="muted">{t("label.pickDateRange")}</p>
                     </div>
                     <span className="chip">
                       {formatDateValue(departStart)} - {formatDateValue(departEnd)}
@@ -1449,8 +1590,8 @@ export default function App() {
                 <div className="date-picker">
                   <div className="date-picker-header">
                     <div>
-                      <label>Return window</label>
-                      <p className="muted">Pick a return date range.</p>
+                      <label>{t("label.returnWindow")}</label>
+                      <p className="muted">{t("label.pickReturnRange")}</p>
                     </div>
                     <span className="chip">
                       {formatDateValue(returnStart)} - {formatDateValue(returnEnd)}
@@ -1471,25 +1612,22 @@ export default function App() {
             </div>
 
             <div className="panel-card">
-              <h3>Destination countries</h3>
+              <h3>{t("section.destinationCountries")}</h3>
               <div className="field">
-                <label>Target countries</label>
+                <label>{t("field.targetCountries")}</label>
                 <DestinationCountryPicker
                   options={insightsCountryOptions}
                   selected={insightsCountries}
                   onChange={setInsightsCountries}
-                  placeholder="Select destination countries"
-                  emptyMessage="No countries found"
+                  placeholder={t("picker.destinationCountries.placeholder")}
+                  emptyMessage={t("picker.destinationCountries.empty")}
                 />
               </div>
             </div>
 
             <div className="panel-card">
-              <h3>Run insights</h3>
-              <p className="muted">
-                This module scans flights across your date windows and aggregates the best prices, fastest routes, and
-                lowest stop counts.
-              </p>
+              <h3>{t("section.runInsights")}</h3>
+              <p className="muted">{t("section.runInsightsDesc")}</p>
               {isLargeScan && (
                 <label className="checkbox">
                   <input
@@ -1497,7 +1635,7 @@ export default function App() {
                     checked={confirmLargeScan}
                     onChange={(event) => setConfirmLargeScan(event.target.checked)}
                   />
-                  I understand this scan covers {datePairCount} date combinations and may take longer.
+                  {t("label.confirmLargeScan", { count: datePairCount })}
                 </label>
               )}
               {hasSameActiveInsightsJob && (
@@ -1507,75 +1645,73 @@ export default function App() {
                     checked={confirmRerun}
                     onChange={(event) => setConfirmRerun(event.target.checked)}
                   />
-                  Re-run even though the same scan is currently running.
+                  {t("label.confirmRerun")}
                 </label>
               )}
               <button className="primary" type="submit" disabled={insightsLoading}>
-                {insightsLoading ? "Scanning..." : "Run flight insights"}
+                {insightsLoading ? t("status.scanning") : t("action.runFlightInsights")}
               </button>
-              <span className="helper-text">Jobs run in the background. Track progress in the queue tab.</span>
+              <span className="helper-text">{t("helper.jobsBackground")}</span>
               <div className="insight-plan">
                 <div className="plan-row">
-                  <span className="plan-label">Origin</span>
+                  <span className="plan-label">{t("plan.origin")}</span>
                   <span>{originLabel}</span>
                 </div>
                 <div className="plan-row">
-                  <span className="plan-label">Destination countries</span>
-                  <span>{insightsCountries.length || 0} selected</span>
+                  <span className="plan-label">{t("plan.destinationCountries")}</span>
+                  <span>{t("plan.selectedCount", { count: insightsCountries.length || 0 })}</span>
                 </div>
                 <div className="plan-row">
-                  <span className="plan-label">Departure dates</span>
-                  <span>{departWindowDays} days</span>
+                  <span className="plan-label">{t("plan.departureDates")}</span>
+                  <span>{t("count.days", { count: departWindowDays })}</span>
                 </div>
                 <div className="plan-row">
-                  <span className="plan-label">Return dates</span>
-                  <span>{returnWindowDays} days</span>
+                  <span className="plan-label">{t("plan.returnDates")}</span>
+                  <span>{t("count.days", { count: returnWindowDays })}</span>
                 </div>
                 <div className="plan-row">
-                  <span className="plan-label">Date combinations</span>
-                  <span>{datePairCount} pairs</span>
+                  <span className="plan-label">{t("plan.dateCombinations")}</span>
+                  <span>{t("plan.pairsCount", { count: datePairCount })}</span>
                 </div>
-                <p className="muted">
-                  We scan every origin airport × destination airport pair for each date combination. Results are cached
-                  to avoid duplicates and the scanner runs in parallel.
-                </p>
+                <p className="muted">{t("plan.description")}</p>
               </div>
-              <span className="status-meta">Last run {formatDateTimeValue(lastInsightsRun)}</span>
+              <span className="status-meta">
+                {t("status.lastRun", { time: formatDateTimeValue(lastInsightsRun) })}
+              </span>
               {insightsError && <p className="error">{insightsError}</p>}
             </div>
           </form>
         ) : (
           <div className="panel-grid">
             <div className="panel-card">
-              <h3>Queue control</h3>
-              <p className="muted">Track background flight scans and download results when they complete.</p>
+              <h3>{t("section.queueControl")}</h3>
+              <p className="muted">{t("section.queueControlDesc")}</p>
               <div className="controls">
                 <button className="ghost" type="button" onClick={() => refreshJobs(true)}>
-                  {jobsLoading ? "Refreshing..." : "Refresh queue"}
+                  {jobsLoading ? t("status.refreshing") : t("action.refreshQueue")}
                 </button>
                 <span className="status-meta">
-                  {hasActiveJobs ? "Active jobs running" : "No active jobs"}
+                  {hasActiveJobs ? t("status.activeJobs") : t("status.noActiveJobs")}
                 </span>
               </div>
               {jobsError && <p className="error">{jobsError}</p>}
             </div>
             <div className="panel-card">
-              <h3>What happens next?</h3>
-              <p className="muted">
-                Start a flight insight scan, then monitor progress here. You can cancel a job at any time and rerun with
-                different dates or countries.
-              </p>
+              <h3>{t("section.queueNext")}</h3>
+              <p className="muted">{t("section.queueNextDesc")}</p>
               <div className="queue-steps">
                 <span className="chip">1</span>
-                <span>Load airports for origin + destinations</span>
+                <span>{t("queue.step.loadAirports")}</span>
                 <span className="chip">2</span>
-                <span>Build the full search matrix</span>
+                <span>{t("queue.step.buildMatrix")}</span>
                 <span className="chip">3</span>
-                <span>Scan flights in parallel + cache</span>
+                <span>{t("queue.step.scanFlights")}</span>
                 <span className="chip">4</span>
-                <span>Clean + rank results</span>
+                <span>{t("queue.step.cleanRank")}</span>
               </div>
-              {activeJobId && <span className="status-meta">Latest job ID {activeJobId}</span>}
+              {activeJobId && (
+                <span className="status-meta">{t("status.latestJobId", { id: activeJobId })}</span>
+              )}
             </div>
           </div>
         )}
@@ -1587,69 +1723,71 @@ export default function App() {
             {insights ? (
               <>
                 <div className="section-header">
-                <div>
-                  <p className="eyebrow">Flight insights</p>
-                  <h2>Planner highlights</h2>
-                </div>
-                <div className="insight-actions">
-                  <div className="pill">
-                    {insights.summary.options} options - {insights.summary.origin_airports.join(", ")}
+                  <div>
+                    <p className="eyebrow">{t("section.flightInsights")}</p>
+                    <h2>{t("section.plannerHighlights")}</h2>
                   </div>
-                  {insightsReport && (
-                    <a className="ghost" href={insightsReport.url} download>
-                      Download Excel
-                    </a>
-                  )}
+                  <div className="insight-actions">
+                    <div className="pill">
+                      {t("insights.summary", {
+                        count: insights.summary.options,
+                        origins: insights.summary.origin_airports.join(", ")
+                      })}
+                    </div>
+                    {insightsReport && (
+                      <a className="ghost" href={insightsReport.url} download>
+                        {t("action.downloadExcel")}
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
                 <div className="stats">
                   <div className="stat-card">
-                    <p>Departure window</p>
+                    <p>{t("stats.departureWindow")}</p>
                     <h3>
                       {formatDateValue(insights.summary.depart_start)} - {formatDateValue(insights.summary.depart_end)}
                     </h3>
                     <span>
-                      Return {formatDateValue(insights.summary.return_start)} -{" "}
-                      {formatDateValue(insights.summary.return_end)}
+                      {t("stats.returnWindow", {
+                        start: formatDateValue(insights.summary.return_start),
+                        end: formatDateValue(insights.summary.return_end)
+                      })}
                     </span>
                   </div>
                   <div className="stat-card">
-                    <p>Origin airports</p>
+                    <p>{t("stats.originAirports")}</p>
                     <h3>{insights.summary.origin_airports.join(", ")}</h3>
-                    <span>Currency {insights.summary.currency}</span>
+                    <span>{t("stats.currency", { currency: insights.summary.currency })}</span>
                   </div>
                   <div className="stat-card">
-                    <p>Destination airports</p>
+                    <p>{t("stats.destinationAirports")}</p>
                     <h3>{insights.summary.destination_airports.slice(0, 6).join(", ")}</h3>
-                    <span>{insights.summary.destination_airports.length} total airports</span>
+                    <span>{t("stats.totalAirports", { count: insights.summary.destination_airports.length })}</span>
                   </div>
                 </div>
                 <div className="insights-grid">
-                  {renderFlightInsightCard("Best prices", insights.top_price)}
-                  {renderFlightInsightCard("Fastest routes", insights.top_duration)}
-                  {renderFlightInsightCard("Fewest stops", insights.top_fewest_stops)}
-                  {renderFlightInsightCard("Top scores", insights.top_score)}
+                  {renderFlightInsightCard(t("insights.card.bestPrices"), insights.top_price)}
+                  {renderFlightInsightCard(t("insights.card.fastestRoutes"), insights.top_duration)}
+                  {renderFlightInsightCard(t("insights.card.fewestStops"), insights.top_fewest_stops)}
+                  {renderFlightInsightCard(t("insights.card.topScores"), insights.top_score)}
                 </div>
               </>
             ) : (
               <div className="empty empty-compact">
-                <h2>No insights yet</h2>
-                <p>Run a scan to surface the best prices, fastest routes, and top scoring trips.</p>
+                <h2>{t("empty.noInsightsTitle")}</h2>
+                <p>{t("empty.noInsightsDesc")}</p>
               </div>
             )}
           </section>
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Chasles itineraries</p>
-                <h2>Suggested routing chains</h2>
+                <p className="eyebrow">{t("section.chaslesItineraries")}</p>
+                <h2>{t("section.chaslesTitle")}</h2>
               </div>
               <div className="pill">{tripRangeLabel}</div>
             </div>
-            <p className="muted">
-              Build multi-stop routes from your selected countries. Chasles relation keeps the chain coherent: A→B + B→C
-              = A→C.
-            </p>
+            <p className="muted">{t("section.chaslesDesc")}</p>
             {hasItineraryInputs ? (
               itineraryCategories.length ? (
                 <div className="itinerary-studio">
@@ -1657,10 +1795,10 @@ export default function App() {
                     <div key={category.key} className="itinerary-category">
                       <div className="itinerary-category-header">
                         <div>
-                          <h3>{category.label}</h3>
-                          <p className="muted">{category.description}</p>
+                          <h3>{t(category.labelKey)}</h3>
+                          <p className="muted">{t(category.descriptionKey)}</p>
                         </div>
-                        <span className="chip">{category.suggestions.length} routes</span>
+                        <span className="chip">{t("count.routes", { count: category.suggestions.length })}</span>
                       </div>
                       <div className="itinerary-list">
                         {category.suggestions.map((suggestion) => {
@@ -1700,11 +1838,13 @@ export default function App() {
                                     </span>
                                   );
                                 })}
-                                <span className="stop-chip travel-chip">{suggestion.travelDays} travel days</span>
+                                <span className="stop-chip travel-chip">
+                                  {t("label.travelDays", { count: suggestion.travelDays })}
+                                </span>
                               </div>
                               <div className="itinerary-meta">
-                                <span className="chip">~{suggestion.totalDays} days</span>
-                                <span className="muted">Based on {tripRangeLabel} window</span>
+                                <span className="chip">{t("label.totalDaysApprox", { count: suggestion.totalDays })}</span>
+                                <span className="muted">{t("label.basedOnWindow", { range: tripRangeLabel })}</span>
                               </div>
                             </div>
                           );
@@ -1715,14 +1855,14 @@ export default function App() {
                 </div>
               ) : (
                 <div className="empty empty-compact">
-                  <h2>No itineraries yet</h2>
-                  <p>Add more destination countries to expand the route builder.</p>
+                  <h2>{t("empty.noItinerariesTitle")}</h2>
+                  <p>{t("empty.noItinerariesDesc")}</p>
                 </div>
               )
             ) : (
               <div className="empty empty-compact">
-                <h2>Pick destination countries</h2>
-                <p>Select at least one country and set a date window to build itineraries.</p>
+                <h2>{t("empty.pickDestinationsTitle")}</h2>
+                <p>{t("empty.pickDestinationsDesc")}</p>
               </div>
             )}
           </section>
@@ -1733,10 +1873,10 @@ export default function App() {
         <section className="section" data-animate>
           <div className="section-header">
             <div>
-              <p className="eyebrow">Flight jobs</p>
-              <h2>Progress and queue</h2>
+              <p className="eyebrow">{t("section.flightJobs")}</p>
+              <h2>{t("section.progressQueue")}</h2>
             </div>
-            <div className="pill">{jobs.length} jobs</div>
+            <div className="pill">{t("count.jobs", { count: jobs.length })}</div>
           </div>
           {jobs.length ? (
             <div className="queue-grid">
@@ -1751,7 +1891,7 @@ export default function App() {
                   </div>
                   <div className="job-meta">
                     <span>{Math.round(job.progress * 100)}%</span>
-                    <span>Updated {formatJobTimeValue(job.updated_at)}</span>
+                    <span>{t("status.updated", { time: formatJobTimeValue(job.updated_at) })}</span>
                   </div>
                   <p className="job-stage">{job.stage}</p>
                   <div
@@ -1760,7 +1900,7 @@ export default function App() {
                     aria-valuenow={job.progress * 100}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label="Job progress"
+                    aria-label={t("status.jobProgress")}
                   >
                     <span style={{ width: `${Math.round(job.progress * 100)}%` }} />
                   </div>
@@ -1768,23 +1908,23 @@ export default function App() {
                   <div className="job-actions">
                     {(job.status === "running" || job.status === "queued") && (
                       <button className="ghost" type="button" onClick={() => handleCancelJob(job.id)}>
-                        Cancel job
+                        {t("action.cancelJob")}
                       </button>
                     )}
                     {job.status === "completed" && (
                       <button className="primary" type="button" onClick={() => handleLoadJobResult(job.id)}>
-                        Load results
+                        {t("action.loadResults")}
                       </button>
                     )}
                   </div>
-                  <span className="status-meta">Job ID {job.id}</span>
+                  <span className="status-meta">{t("status.jobId", { id: job.id })}</span>
                 </div>
               ))}
             </div>
           ) : (
             <div className="empty empty-compact">
-              <h2>No jobs yet</h2>
-              <p>Queue a flight insight scan to see progress and download results here.</p>
+              <h2>{t("empty.noJobsTitle")}</h2>
+              <p>{t("empty.noJobsDesc")}</p>
             </div>
           )}
         </section>
@@ -1793,44 +1933,44 @@ export default function App() {
       {tab === "optimizer" &&
         (!data ? (
           <section className="empty" data-animate>
-            <h2>No results yet</h2>
-            <p>Run the optimizer to generate results before exploring the calendar, map, and destinations.</p>
+            <h2>{t("empty.noResultsTitle")}</h2>
+            <p>{t("empty.noResultsDesc")}</p>
           </section>
         ) : (
           <>
           <section className="stats" data-animate>
             <div className="stat-card">
-              <p>Total rest days</p>
+              <p>{t("stats.totalRestDays")}</p>
               <h3>{data.timeoff.total_rest_days}</h3>
-              <span>Across {data.timeoff.rest_periods.length} windows</span>
+              <span>{t("stats.acrossWindows", { count: data.timeoff.rest_periods.length })}</span>
             </div>
             <div className="stat-card">
-              <p>Paid leave used</p>
+              <p>{t("stats.paidLeaveUsed")}</p>
               <h3>{data.timeoff.used_leave_days}</h3>
-              <span>{data.timeoff.unused_leave_days} unused</span>
+              <span>{t("stats.unusedLeave", { count: data.timeoff.unused_leave_days })}</span>
             </div>
             <div className="stat-card">
-              <p>Optimization score</p>
+              <p>{t("stats.optimizationScore")}</p>
               <h3>{data.timeoff.score.toFixed(1)}</h3>
-              <span>Composite rest index</span>
+              <span>{t("stats.compositeRestIndex")}</span>
             </div>
             <div className="stat-card accent">
-              <p>Destinations</p>
+              <p>{t("stats.destinations")}</p>
               <h3>{data.destinations.length}</h3>
-              <span>{data.flights.length} flight options</span>
+              <span>{t("stats.flightOptions", { count: data.flights.length })}</span>
             </div>
           </section>
 
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Optimized calendar</p>
-                <h2>See every holiday and optimized leave day</h2>
+                <p className="eyebrow">{t("section.optimizedCalendar")}</p>
+                <h2>{t("section.optimizedCalendarTitle")}</h2>
               </div>
               <div className="calendar-actions">
-                <div className="pill">{data.timeoff.rest_periods.length} rest windows</div>
+                <div className="pill">{t("stats.restWindows", { count: data.timeoff.rest_periods.length })}</div>
                 <button className="ghost" type="button" onClick={handleExportICS}>
-                  Download calendar (.ics)
+                  {t("action.downloadCalendar")}
                 </button>
               </div>
             </div>
@@ -1849,26 +1989,26 @@ export default function App() {
                 <div className="calendar-legend">
                   <div className="legend-item">
                     <span className="legend-swatch weekend" />
-                    Weekend
+                    {t("legend.weekend")}
                   </div>
                   <div className="legend-item">
                     <span className="legend-swatch holiday" />
-                    Holiday
+                    {t("legend.holiday")}
                   </div>
                   <div className="legend-item">
                     <span className="legend-swatch closure" />
-                    Closure
+                    {t("legend.closure")}
                   </div>
                   <div className="legend-item">
                     <span className="legend-swatch leave" />
-                    Optimized leave
+                    {t("legend.optimizedLeave")}
                   </div>
                 </div>
               </div>
               <div className="calendar-panel">
                 <div className="calendar-panel-header">
-                  <h3>Rest windows</h3>
-                  <p className="muted">Hover or click a window to reveal destination suggestions.</p>
+                  <h3>{t("calendar.restWindows")}</h3>
+                  <p className="muted">{t("calendar.restWindowsHint")}</p>
                 </div>
                 <div className="period-list" onMouseLeave={() => setHoveredPeriodKey(null)}>
                   {periodDetails.map((entry) => {
@@ -1883,31 +2023,39 @@ export default function App() {
                         onClick={() => setSelectedPeriodKey(key)}
                       >
                         <span>{restRange(entry.period)}</span>
-                        <span className="muted">{entry.period.days} days</span>
+                        <span className="muted">{t("count.days", { count: entry.period.days })}</span>
                       </button>
                     );
                   })}
-                  {!periodDetails.length && <p className="muted">No rest windows generated yet.</p>}
+                  {!periodDetails.length && <p className="muted">{t("calendar.noRestWindows")}</p>}
                 </div>
                 {activePeriod ? (
                   <div className="period-detail">
                     <div>
                       <h4>{restRange(activePeriod.period)}</h4>
-                      <p className="muted">{activePeriod.period.days} days of rest</p>
+                      <p className="muted">{t("calendar.daysOfRest", { count: activePeriod.period.days })}</p>
                     </div>
                     {periodStats.get(makePeriodKey(activePeriod.period)) && (
                       <div className="period-stats">
                         <span className="chip">
-                          {periodStats.get(makePeriodKey(activePeriod.period))?.leave ?? 0} optimized leave
+                          {t("calendar.stats.optimizedLeave", {
+                            count: periodStats.get(makePeriodKey(activePeriod.period))?.leave ?? 0
+                          })}
                         </span>
                         <span className="chip">
-                          {periodStats.get(makePeriodKey(activePeriod.period))?.holiday ?? 0} holidays
+                          {t("calendar.stats.holidays", {
+                            count: periodStats.get(makePeriodKey(activePeriod.period))?.holiday ?? 0
+                          })}
                         </span>
                         <span className="chip">
-                          {periodStats.get(makePeriodKey(activePeriod.period))?.weekend ?? 0} weekend days
+                          {t("calendar.stats.weekendDays", {
+                            count: periodStats.get(makePeriodKey(activePeriod.period))?.weekend ?? 0
+                          })}
                         </span>
                         <span className="chip">
-                          {periodStats.get(makePeriodKey(activePeriod.period))?.closure ?? 0} closures
+                          {t("calendar.stats.closures", {
+                            count: periodStats.get(makePeriodKey(activePeriod.period))?.closure ?? 0
+                          })}
                         </span>
                       </div>
                     )}
@@ -1924,7 +2072,7 @@ export default function App() {
                           );
                         })
                       ) : (
-                        <span className="muted">No destination suggestions for this window.</span>
+                        <span className="muted">{t("calendar.noDestinations")}</span>
                       )}
                     </div>
                     <button
@@ -1933,12 +2081,12 @@ export default function App() {
                       onClick={() => handleUsePeriodForInsights(activePeriod.period, activePeriod.countries)}
                       disabled={!activePeriod.countries.length}
                     >
-                      Use this window for flight insights
+                      {t("action.useWindowForInsights")}
                     </button>
                   </div>
                 ) : (
                   <div className="period-detail empty-detail">
-                    <p className="muted">Hover a window on the calendar to preview destinations.</p>
+                    <p className="muted">{t("calendar.hoverHint")}</p>
                   </div>
                 )}
               </div>
@@ -1948,12 +2096,15 @@ export default function App() {
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Timeoff intelligence</p>
-                <h2>Rest period map</h2>
+                <p className="eyebrow">{t("section.timeoffIntelligence")}</p>
+                <h2>{t("section.restPeriodMap")}</h2>
               </div>
               {data.timeoff.best_month && (
                 <div className="pill">
-                  Best month #{data.timeoff.best_month.month} · {data.timeoff.best_month.efficiency.toFixed(2)} rest/CP
+                  {t("stats.bestMonth", {
+                    month: data.timeoff.best_month.month,
+                    efficiency: data.timeoff.best_month.efficiency.toFixed(2)
+                  })}
                 </div>
               )}
             </div>
@@ -1962,9 +2113,9 @@ export default function App() {
                 <div key={`${period.start_date}-${index}`} className="rest-card">
                   <div>
                     <h4>{restRange(period)}</h4>
-                    <p className="muted">{period.days} days</p>
+                    <p className="muted">{t("count.days", { count: period.days })}</p>
                   </div>
-                  <span className="chip">Window {index + 1}</span>
+                  <span className="chip">{t("label.windowIndex", { index: index + 1 })}</span>
                 </div>
               ))}
             </div>
@@ -1973,48 +2124,63 @@ export default function App() {
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Destinations</p>
-                <h2>Shortlisted places</h2>
+                <p className="eyebrow">{t("section.destinations")}</p>
+                <h2>{t("section.shortlistedPlaces")}</h2>
               </div>
-              <div className="pill">{filteredDestinations.length} matches</div>
+              <div className="pill">{t("count.matches", { count: filteredDestinations.length })}</div>
             </div>
             <div className="search-controls">
               <input
-                placeholder="Search country, city, or IATA"
+                placeholder={t("placeholder.searchDestinations")}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                aria-label="Search destinations"
+                aria-label={t("aria.searchDestinations")}
               />
               <select
                 value={destHaulFilter}
                 onChange={(event) => setDestHaulFilter(event.target.value)}
-                aria-label="Filter by haul type"
+                aria-label={t("aria.filterHaul")}
               >
-                <option value="all">All hauls</option>
-                <option value="short">Short-haul</option>
-                <option value="medium">Medium-haul</option>
-                <option value="long">Long-haul</option>
-                <option value="ultra">Ultra-long</option>
+                <option value="all">{t("option.haul.all")}</option>
+                <option value="short">{t("option.haul.short")}</option>
+                <option value="medium">{t("option.haul.medium")}</option>
+                <option value="long">{t("option.haul.long")}</option>
+                <option value="ultra">{t("option.haul.ultra")}</option>
               </select>
-              <select value={destSort} onChange={(event) => setDestSort(event.target.value)} aria-label="Sort results">
-                <option value="rest-desc">Sort by rest days</option>
-                <option value="rest-asc">Sort by rest days (asc)</option>
-                <option value="flight-hours">Sort by flight hours</option>
-                <option value="country">Sort by country</option>
+              <select
+                value={destSort}
+                onChange={(event) => setDestSort(event.target.value)}
+                aria-label={t("aria.sortResults")}
+              >
+                <option value="rest-desc">{t("option.sort.restDesc")}</option>
+                <option value="rest-asc">{t("option.sort.restAsc")}</option>
+                <option value="flight-hours">{t("option.sort.flightHours")}</option>
+                <option value="country">{t("option.sort.country")}</option>
               </select>
               <input
                 type="number"
                 min={0}
                 value={destMinDays}
                 onChange={(event) => setDestMinDays(Number(event.target.value))}
-                placeholder="Min rest days"
-                aria-label="Minimum rest days"
+                placeholder={t("placeholder.minRestDays")}
+                aria-label={t("aria.minRestDays")}
               />
             </div>
             <div className="dest-grid">
               {filteredDestinations.map((dest, index) => {
                 const flag = flagEmoji(dest.country_code ?? countryCodeByName.get(dest.country));
                 const climateMonths = formatMonthsValue(dest.climate?.months);
+                const haulLabel = dest.haul_category
+                  ? t(`haul.${dest.haul_category}Label`)
+                  : t("label.haulUnknown");
+                const tempValue = dest.climate?.avg_temp_c;
+                const rainValue = dest.climate?.precip_mm;
+                const tempTitle = climateMonths
+                  ? t("tooltip.avgTempMonths", { months: climateMonths, temp: tempValue })
+                  : t("tooltip.avgTemp", { temp: tempValue });
+                const rainTitle = climateMonths
+                  ? t("tooltip.avgRainMonths", { months: climateMonths, precip: rainValue })
+                  : t("tooltip.avgRain", { precip: rainValue });
                 return (
                   <div key={`${dest.country}-${index}`} className="dest-card">
                     <div className="dest-header">
@@ -2022,43 +2188,29 @@ export default function App() {
                         <h4>
                           {flag && <span className="flag">{flag}</span>} {dest.country}
                         </h4>
-                        <p className="muted">
-                          {dest.haul_category ? `${dest.haul_category} haul` : "Haul not classified"}
-                        </p>
+                        <p className="muted">{haulLabel}</p>
                       </div>
-                      {dest.flight_hours && <span className="chip">~{dest.flight_hours}h flight</span>}
+                      {dest.flight_hours && (
+                        <span className="chip">{t("label.flightHours", { hours: dest.flight_hours })}</span>
+                      )}
                     </div>
                     <div className="dest-badges">
-                      {dest.climate?.avg_temp_c !== undefined && dest.climate?.avg_temp_c !== null && (
-                        <span
-                          className="chip"
-                          title={
-                            climateMonths
-                              ? `Avg temperature (${climateMonths}): ${dest.climate.avg_temp_c}C`
-                              : `Avg temperature: ${dest.climate.avg_temp_c}C`
-                          }
-                        >
-                          {dest.climate.avg_temp_c}C avg
+                      {tempValue !== undefined && tempValue !== null && (
+                        <span className="chip" title={tempTitle}>
+                          {t("label.avgTemp", { temp: tempValue })}
                         </span>
                       )}
-                      {dest.climate?.precip_mm !== undefined && dest.climate?.precip_mm !== null && (
-                        <span
-                          className="chip"
-                          title={
-                            climateMonths
-                              ? `Avg precipitation (${climateMonths}): ${dest.climate.precip_mm}mm`
-                              : `Avg precipitation: ${dest.climate.precip_mm}mm`
-                          }
-                        >
-                          {dest.climate.precip_mm}mm rain
+                      {rainValue !== undefined && rainValue !== null && (
+                        <span className="chip" title={rainTitle}>
+                          {t("label.avgRain", { precip: rainValue })}
                         </span>
                       )}
                       {dest.safety?.level && (
                         <span
                           className={`chip safety ${safetyClass(dest.safety.level)}`}
-                          title={dest.safety.message ?? "Safety advisory"}
+                          title={dest.safety.message ?? t("tooltip.safety")}
                         >
-                          Safety: {dest.safety.level}
+                          {t("label.safety", { level: dest.safety.level })}
                         </span>
                       )}
                     </div>
@@ -2073,28 +2225,32 @@ export default function App() {
                           </span>
                         ))
                       ) : (
-                        <span className="muted">General coverage</span>
+                        <span className="muted">{t("label.generalCoverage")}</span>
                       )}
                     </div>
                     <div className="dest-meta">
                       <span className="pill">{restRange(dest.rest_period)}</span>
-                      <span className="chip">From {dest.source_iata.join(", ")}</span>
-                      <span className="chip">To {dest.destination_iatas.join(", ")}</span>
+                      <span className="chip">
+                        {t("label.fromAirports", { codes: dest.source_iata.join(", ") })}
+                      </span>
+                      <span className="chip">
+                        {t("label.toAirports", { codes: dest.destination_iatas.join(", ") })}
+                      </span>
                     </div>
                   </div>
                 );
               })}
-              {!filteredDestinations.length && <p className="muted">No destinations match the filter.</p>}
+              {!filteredDestinations.length && <p className="muted">{t("empty.noDestinationsMatch")}</p>}
             </div>
           </section>
 
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Network view</p>
-                <h2>Routes map</h2>
+                <p className="eyebrow">{t("section.networkView")}</p>
+                <h2>{t("section.routesMap")}</h2>
               </div>
-              <p className="muted">Visualize the strongest routes and their rest windows.</p>
+              <p className="muted">{t("section.routesMapDesc")}</p>
             </div>
             <RoutesMap data={data} formatConfig={formatConfig} />
           </section>
@@ -2103,29 +2259,29 @@ export default function App() {
             <section className="section" data-animate>
               <div className="section-header">
                 <div>
-                  <p className="eyebrow">Flight highlights</p>
-                  <h2>Best options at a glance</h2>
+                  <p className="eyebrow">{t("section.flightHighlights")}</p>
+                  <h2>{t("section.flightHighlightsTitle")}</h2>
                 </div>
-                <p className="muted">Best price, fastest route, and strongest scores across results.</p>
+                <p className="muted">{t("section.flightHighlightsDesc")}</p>
               </div>
               <div className="highlight-grid">
                 {renderHighlightCard(
-                  "Best price",
+                  t("label.bestPrice"),
                   flightHighlights.cheapest,
                   formatCurrencyValue(flightHighlights.cheapest?.price ?? null)
                 )}
                 {renderHighlightCard(
-                  "Fastest",
+                  t("label.fastest"),
                   flightHighlights.fastest,
                   formatDuration(flightHighlights.fastest?.total_duration_min ?? null)
                 )}
                 {renderHighlightCard(
-                  "Fewest stops",
+                  t("label.fewestStops"),
                   flightHighlights.fewestStops,
                   fewestStopsMetric
                 )}
                 {renderHighlightCard(
-                  "Top score",
+                  t("label.topScore"),
                   flightHighlights.bestScore,
                   bestScoreMetric
                 )}
@@ -2136,10 +2292,10 @@ export default function App() {
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Flights</p>
-                <h2>Top flight options</h2>
+                <p className="eyebrow">{t("section.flights")}</p>
+                <h2>{t("section.topFlightOptions")}</h2>
               </div>
-              <p className="muted">Showing best ranked options across destinations.</p>
+              <p className="muted">{t("section.topFlightOptionsDesc")}</p>
             </div>
             <div className="flight-grid">
               {topFlights.map((flight, index) => (
@@ -2150,35 +2306,35 @@ export default function App() {
                   </div>
                   <div className="flight-meta">
                     <span>{formatDateValue(flight.depart_date)}</span>
-                    <span>{flight.return_date ? formatDateValue(flight.return_date) : "One-way"}</span>
+                    <span>{flight.return_date ? formatDateValue(flight.return_date) : t("label.oneWay")}</span>
                   </div>
                   <div className="flight-details">
                     <div>
-                      <p className="muted">Duration</p>
+                      <p className="muted">{t("label.duration")}</p>
                       <strong>{formatDuration(flight.total_duration_min)}</strong>
                     </div>
                     <div>
-                      <p className="muted">Stops</p>
-                      <strong>{flight.stops ?? "--"}</strong>
+                      <p className="muted">{t("label.stops")}</p>
+                      <strong>{flight.stops ?? t("common.na")}</strong>
                     </div>
                     <div>
-                      <p className="muted">Price</p>
+                      <p className="muted">{t("label.price")}</p>
                       <strong>{formatCurrencyValue(flight.price)}</strong>
                     </div>
                   </div>
                 </div>
               ))}
-              {!topFlights.length && <p className="muted">No flight options available.</p>}
+              {!topFlights.length && <p className="muted">{t("empty.noFlights")}</p>}
             </div>
           </section>
 
           <section className="section" data-animate>
             <div className="section-header">
               <div>
-                <p className="eyebrow">Itineraries</p>
-                <h2>Curated plans</h2>
+                <p className="eyebrow">{t("section.itineraries")}</p>
+                <h2>{t("section.curatedPlans")}</h2>
               </div>
-              <p className="muted">Each itinerary bundles its matching destination and top travel options.</p>
+              <p className="muted">{t("section.curatedPlansDesc")}</p>
             </div>
             <div className="itinerary-grid">
               {data.itineraries.map((plan, index) => (
@@ -2188,25 +2344,25 @@ export default function App() {
                       <h4>{getDestinationLabel(plan.destination)}</h4>
                       <p className="muted">{restRange(plan.rest_period)}</p>
                     </div>
-                    <span className="chip">{plan.rest_period.days} days</span>
+                    <span className="chip">{t("count.days", { count: plan.rest_period.days })}</span>
                   </div>
                   <div className="itinerary-body">
                     <div>
-                      <p className="muted">Flights</p>
-                      <strong>{plan.flights.length || data.flights.length} options</strong>
+                      <p className="muted">{t("label.flights")}</p>
+                      <strong>{t("count.options", { count: plan.flights.length || data.flights.length })}</strong>
                     </div>
                     <div>
-                      <p className="muted">Lodging</p>
-                      <strong>{plan.lodging.length || data.lodging.length} options</strong>
+                      <p className="muted">{t("label.lodging")}</p>
+                      <strong>{t("count.options", { count: plan.lodging.length || data.lodging.length })}</strong>
                     </div>
                     <div>
-                      <p className="muted">Notes</p>
-                      <strong>{plan.notes ?? "Auto-compiled"}</strong>
+                      <p className="muted">{t("label.notes")}</p>
+                      <strong>{plan.notes ?? t("label.autoCompiled")}</strong>
                     </div>
                   </div>
                 </div>
               ))}
-              {!data.itineraries.length && <p className="muted">No itinerary plans available.</p>}
+              {!data.itineraries.length && <p className="muted">{t("empty.noItineraryPlans")}</p>}
             </div>
           </section>
           </>
